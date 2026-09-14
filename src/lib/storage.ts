@@ -78,14 +78,9 @@ export function getUserByUsername(username: string): User | undefined {
 }
 
 export function getCurrentUser(): User | null {
-  if (!isBrowser) return INITIAL_USERS[0];
+  if (!isBrowser) return null;
   const stored = localStorage.getItem(CURRENT_USER_KEY);
-  if (!stored) {
-    // Default to admin for initial access
-    const defaultUser = getUsers().find((u) => u.username === 'admin') || INITIAL_USERS[0];
-    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(defaultUser));
-    return defaultUser;
-  }
+  if (!stored) return null; // No session — must login manually
   try {
     return JSON.parse(stored);
   } catch {

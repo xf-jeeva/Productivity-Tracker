@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { login } from '@/lib/storage';
+import { login, getCurrentUser } from '@/lib/storage';
 import { playRubberStampSound, playTypewriterClick } from '@/lib/sound';
 import { KeyRound, ShieldAlert, ArrowRight, Sparkles } from 'lucide-react';
 
@@ -12,6 +12,27 @@ export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [checking, setChecking] = useState(true);
+
+  // If already logged in, redirect immediately — no need to login again
+  useEffect(() => {
+    const user = getCurrentUser();
+    if (user) {
+      router.replace(user.role === 'admin' ? '/admin' : '/');
+    } else {
+      setChecking(false);
+    }
+  }, [router]);
+
+  if (checking) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '50vh' }}>
+        <div className="typewriter-text" style={{ fontSize: '0.85rem', color: 'var(--ink-secondary)', letterSpacing: '0.1em' }}>
+          AUTHENTICATING...
+        </div>
+      </div>
+    );
+  }
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();

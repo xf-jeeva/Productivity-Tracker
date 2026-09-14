@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { 
   getCurrentUser, 
   getTasks, 
@@ -35,8 +36,10 @@ import {
 } from 'lucide-react';
 
 export default function MyDeskPage() {
+  const router = useRouter();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Navigation view: 'active' (Shows Daily Tasks & Daily Routines sections) | 'completed' (Saved separately) | 'deleted'
   const [activeView, setActiveView] = useState<'active' | 'completed' | 'deleted'>('active');
@@ -53,8 +56,13 @@ export default function MyDeskPage() {
   useEffect(() => {
     const sync = () => {
       const user = getCurrentUser();
+      if (!user) {
+        router.replace('/login');
+        return;
+      }
       setCurrentUser(user);
       setTasks(getTasks());
+      setIsLoading(false);
     };
 
     sync();
@@ -64,7 +72,7 @@ export default function MyDeskPage() {
     if (savedNotes) setDeskNotes(savedNotes);
 
     return () => window.removeEventListener(BUREAU_SYNC_EVENT, sync);
-  }, []);
+  }, [router]);
 
   const handleSaveNotes = (val: string) => {
     setDeskNotes(val);
@@ -134,21 +142,13 @@ export default function MyDeskPage() {
   const filteredCompleted = myCompletedItems.filter(matchesSearch);
   const filteredDeleted = myDeletedItems.filter(matchesSearch);
 
-  if (!currentUser) {
+  if (isLoading || !currentUser) {
     return (
-      <div style={{ maxWidth: '500px', margin: '4rem auto', textAlign: 'center' }}>
-        <div className="vintage-paper" style={{ padding: '2.5rem' }}>
-          <BookOpen size={48} style={{ color: 'var(--brass-gold)', margin: '0 auto 1rem' }} />
-          <h2 className="serif-display" style={{ fontSize: '1.75rem', marginBottom: '0.5rem' }}>
-            Workstation Unattended
-          </h2>
-          <p style={{ color: 'var(--ink-secondary)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-            Please sign in with your credentials to manage your daily tasks, routines, and reminders.
-          </p>
-          <Link href="/login" className="btn-brass" style={{ padding: '0.65rem 1.5rem' }}>
-            <LogIn size={16} />
-            <span>Sign In to Workstation</span>
-          </Link>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '50vh' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div className="typewriter-text" style={{ fontSize: '0.85rem', color: 'var(--ink-secondary)', letterSpacing: '0.1em' }}>
+            LOADING WORKSTATION...
+          </div>
         </div>
       </div>
     );
