@@ -1,59 +1,117 @@
-// Cloud User Sync Service
-// When Firebase is configured, all user accounts are synced to Firebase Realtime Database.
-// This allows users created by admin to be accessible from ANY device.
-// When Firebase is not configured, falls back to localStorage only.
+// Cloud User Sync — powered by Supabase
+// Reads/writes user accounts to a shared Supabase PostgreSQL table.
+// Falls back to localStorage-only mode when Supabase is not configured.
+//
+// Required Supabase table (run this SQL in Supabase → SQL Editor):
+//
+//   create table if not exists bureau_users (
+//     id           text primary key,
+//     username     text unique not null,
+//     password     text not null,
+//     name         text not null,
+//     role         text not null default 'member',
+//     title        text,
+//     department   text,
+//     avatar       text,
+//     desk_number  text,
+//     signature    text,
+//     created_at   timestamptz default now()
+//   );
+//   alter table bureau_users enable row level security;
+//   create policy "Allow all" on bureau_users for all using (true) with check (true);
 
-import { ref, get, set, remove, onValue } from 'firebase/database';
-import { db, isFirebaseConfigured } from './firebase';
+import { supabase, isSupabaseConfigured } from './supabase';
 import { User } from '../types';
 
-const CLOUD_USERS_PATH = 'bureau/users';
+const TABLE = 'bureau_users';
 
-// ── Read all users from Firebase ──────────────────────────────────────────
+// Map Supabase row → User object
+function rowToUser(row: Record<string, unknown>): User {
+  return {
+    id:          row.id as string,
+    username:    row.username as string,
+    password:    row.password as string,
+    name:        row.name as string,
+    role:        (row.role as 'admin' | 'member') ?? 'member',
+    title:       row.title as string | undefined,
+    department:  row.department as string | undefined,
+    avatar:      row.avatar as string | undefined,
+    deskNumber:  row.desk_number as string | undefined,
+    signature:   row.signature as string | undefined,
+    createdAt:   row.created_at as string ?? new Date().toISOString(),
+  };
+}
+
+// Map User object → Supabase row
+function userToRow(u: User) {
+  return {
+    id:          u.id,
+    username:    u.username,
+    password:    u.password,
+    name:        u.name,
+    role:        u.role,
+    title:       u.title ?? null,
+    department:  u.department ?? null,
+    avatar:      u.avatar ?? null,
+    desk_number: u.deskNumber ?? null,
+    signature:   u.signature ?? null,
+    created_at:  u.createdAt,
+  };
+}
+
+// ── Fetch all users ────────────────────────────────────────────────────────
 export async function fetchCloudUsers(): Promise<User[] | null> {
-  if (!isFirebaseConfigured || !db) return null;
+  if (!isSupabaseConfigured || !supabase) return null;
   try {
-    const snapshot = await get(ref(db, CLOUD_USERS_PATH));
-    if (!snapshot.exists()) return [];
-    const data = snapshot.val();
-    return Object.values(data) as User[];
+    const { data, error } = await supabase.from(TABLE).select('*');
+    if (error) { console.warn('[Supabase] fetchCloudUsers:', error.message); return null; }
+    return (data ?? []).map(rowToUser);
   } catch (e) {
-    console.warn('[CloudUsers] fetchCloudUsers failed', e);
+    console.warn('[Supabase] fetchCloudUsers failed', e);
     return null;
   }
 }
 
-// ── Write all users to Firebase ───────────────────────────────────────────
+// ── Upsert all users (used when admin creates a user) ─────────────────────
 export async function pushCloudUsers(users: User[]): Promise<void> {
-  if (!isFirebaseConfigured || !db) return;
+  if (!isSupabaseConfigured || !supabase) return;
   try {
-    const usersMap: Record<string, User> = {};
-    users.forEach((u) => { usersMap[u.id] = u; });
-    await set(ref(db, CLOUD_USERS_PATH), usersMap);
+    const rows = users.map(userToRow);
+    const { error } = await supabase.from(TABLE).upsert(rows, { onConflict: 'id' });
+    if (error) console.warn('[Supabase] pushCloudUsers:', error.message);
   } catch (e) {
-    console.warn('[CloudUsers] pushCloudUsers failed', e);
+    console.warn('[Supabase] pushCloudUsers failed', e);
   }
 }
 
-// ── Delete a single user from Firebase ───────────────────────────────────
+// ── Delete a user by ID ────────────────────────────────────────────────────
 export async function deleteCloudUser(userId: string): Promise<void> {
-  if (!isFirebaseConfigured || !db) return;
+  if (!isSupabaseConfigured || !supabase) return;
   try {
-    await remove(ref(db, `${CLOUD_USERS_PATH}/${userId}`));
+    const { error } = await supabase.from(TABLE).delete().eq('id', userId);
+    if (error) console.warn('[Supabase] deleteCloudUser:', error.message);
   } catch (e) {
-    console.warn('[CloudUsers] deleteCloudUser failed', e);
+    console.warn('[Supabase] deleteCloudUser failed', e);
   }
 }
 
-// ── Subscribe to live user changes from Firebase ──────────────────────────
+// ── Subscribe to real-time user changes ───────────────────────────────────
 export function subscribeCloudUsers(callback: (users: User[]) => void): (() => void) | null {
-  if (!isFirebaseConfigured || !db) return null;
-  const unsubscribe = onValue(ref(db, CLOUD_USERS_PATH), (snapshot) => {
-    if (!snapshot.exists()) { callback([]); return; }
-    const data = snapshot.val();
-    callback(Object.values(data) as User[]);
-  });
-  return unsubscribe;
+  if (!isSupabaseConfigured || !supabase) return null;
+
+  // Initial fetch
+  fetchCloudUsers().then((users) => { if (users) callback(users); });
+
+  // Real-time subscription
+  const channel = supabase
+    .channel('bureau_users_changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, async () => {
+      const users = await fetchCloudUsers();
+      if (users) callback(users);
+    })
+    .subscribe();
+
+  return () => { supabase?.removeChannel(channel); };
 }
 
-export { isFirebaseConfigured };
+export { isSupabaseConfigured };

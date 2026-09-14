@@ -6,14 +6,14 @@
 // Runs invisibly — no UI, no loading states. Falls back gracefully when Firebase is not configured.
 
 import { useEffect } from 'react';
-import { subscribeCloudUsers, isFirebaseConfigured } from '../lib/cloudUsers';
+import { subscribeCloudUsers, isSupabaseConfigured } from '../lib/cloudUsers';
 import { getUsers, BUREAU_SYNC_EVENT } from '../lib/storage';
 
 const USERS_KEY = 'daily_bureau_users_v3';
 
 export default function CloudUserSync() {
   useEffect(() => {
-    if (!isFirebaseConfigured) return; // No Firebase — local-only mode
+    if (!isSupabaseConfigured) return; // No Supabase — local-only mode
 
     const unsubscribe = subscribeCloudUsers((cloudUsers) => {
       if (!cloudUsers || cloudUsers.length === 0) return;

@@ -2,7 +2,7 @@
 
 import { User, Task, DailyWorkLog, Role, TokenTransaction, RewardClaim, PayoutMethod, ClaimStatus, StickyNote, StickyColor } from '../types';
 import { INITIAL_USERS, INITIAL_TASKS, INITIAL_LOGS, INITIAL_TOKEN_TRANSACTIONS, INITIAL_REWARD_CLAIMS } from './mockData';
-import { pushCloudUsers, deleteCloudUser, isFirebaseConfigured } from './cloudUsers';
+import { pushCloudUsers, deleteCloudUser, isSupabaseConfigured } from './cloudUsers';
 
 const USERS_KEY = 'daily_bureau_users_v3';
 const TASKS_KEY = 'daily_bureau_tasks_v3';
@@ -167,7 +167,7 @@ export function createUser(data: {
     localStorage.setItem(USERS_KEY, JSON.stringify(users));
   }
   // Sync to Firebase so all devices see this new user
-  if (isFirebaseConfigured) {
+  if (isSupabaseConfigured) {
     pushCloudUsers(users).catch(() => {/* silently ignore */});
   }
   emitSync();
@@ -252,7 +252,7 @@ export function deleteUser(userIdentifier: string): { success: boolean; error?: 
   }
 
   // Sync deletion to Firebase
-  if (isFirebaseConfigured) {
+  if (isSupabaseConfigured) {
     deleteCloudUser(target.id).catch(() => {/* silently ignore */});
   }
 
@@ -897,3 +897,4 @@ export function deleteStickyNote(noteId: string): void {
   localStorage.setItem(STICKY_NOTES_KEY, JSON.stringify(all.filter((n) => n.id !== noteId)));
   emitSync();
 }
+
