@@ -2,6 +2,7 @@
 
 import { User, Task, DailyWorkLog, Role, TokenTransaction, RewardClaim, PayoutMethod, ClaimStatus, StickyNote, StickyColor } from '../types';
 import { INITIAL_USERS, INITIAL_TASKS, INITIAL_LOGS, INITIAL_TOKEN_TRANSACTIONS, INITIAL_REWARD_CLAIMS } from './mockData';
+import { pushCloudUsers, deleteCloudUser, isFirebaseConfigured } from './cloudUsers';
 
 const USERS_KEY = 'daily_bureau_users_v3';
 const TASKS_KEY = 'daily_bureau_tasks_v3';
@@ -165,6 +166,10 @@ export function createUser(data: {
   if (isBrowser) {
     localStorage.setItem(USERS_KEY, JSON.stringify(users));
   }
+  // Sync to Firebase so all devices see this new user
+  if (isFirebaseConfigured) {
+    pushCloudUsers(users).catch(() => {/* silently ignore */});
+  }
   emitSync();
   return { success: true, user: newUser };
 }
@@ -244,6 +249,11 @@ export function deleteUser(userIdentifier: string): { success: boolean; error?: 
   const current = getCurrentUser();
   if (current && (current.id === target.id || current.username.toLowerCase() === target.username.toLowerCase())) {
     setCurrentUser(null);
+  }
+
+  // Sync deletion to Firebase
+  if (isFirebaseConfigured) {
+    deleteCloudUser(target.id).catch(() => {/* silently ignore */});
   }
 
   emitSync();

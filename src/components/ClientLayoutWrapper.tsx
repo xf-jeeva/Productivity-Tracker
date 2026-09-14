@@ -7,6 +7,7 @@ import TaskModal from './TaskModal';
 import DailyLogModal from './DailyLogModal';
 import NotificationManager from './NotificationManager';
 import TokenAwardCelebration from './TokenAwardCelebration';
+import CloudUserSync from './CloudUserSync';
 import { Task } from '../types';
 
 export default function ClientLayoutWrapper({ children }: { children: React.ReactNode }) {
@@ -26,6 +27,7 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <CloudUserSync />
       <NotificationManager />
       <TokenAwardCelebration />
       <Header

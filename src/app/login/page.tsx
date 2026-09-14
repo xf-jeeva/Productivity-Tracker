@@ -1,11 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { login, getCurrentUser } from '@/lib/storage';
-import { playRubberStampSound, playTypewriterClick } from '@/lib/sound';
-import { KeyRound, ShieldAlert, ArrowRight, Sparkles } from 'lucide-react';
+import { playRubberStampSound } from '@/lib/sound';
+import { KeyRound, ShieldAlert, ArrowRight, BookOpen } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,8 +12,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [checking, setChecking] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // If already logged in, redirect immediately — no need to login again
+  // If already logged in, redirect immediately
   useEffect(() => {
     const user = getCurrentUser();
     if (user) {
@@ -26,7 +26,7 @@ export default function LoginPage() {
 
   if (checking) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '50vh' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
         <div className="typewriter-text" style={{ fontSize: '0.85rem', color: 'var(--ink-secondary)', letterSpacing: '0.1em' }}>
           AUTHENTICATING...
         </div>
@@ -34,23 +34,25 @@ export default function LoginPage() {
     );
   }
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+    setIsLoading(true);
 
     if (!username.trim() || !password.trim()) {
       setErrorMsg('Please enter both username and password.');
+      setIsLoading(false);
       return;
     }
 
-    const res = login(username, password);
+    const res = login(username.trim(), password.trim());
     if (!res.success) {
-      setErrorMsg(res.error || 'Authentication rejected.');
+      setErrorMsg(res.error || 'Invalid username or password.');
+      setIsLoading(false);
       return;
     }
 
     playRubberStampSound();
-
     if (res.user?.role === 'admin') {
       router.push('/admin');
     } else {
@@ -58,15 +60,8 @@ export default function LoginPage() {
     }
   };
 
-  const handleFillAdmin = () => {
-    playTypewriterClick();
-    setUsername('admin');
-    setPassword('password');
-    setErrorMsg('');
-  };
-
   return (
-    <div style={{ maxWidth: '480px', margin: '3rem auto' }}>
+    <div style={{ maxWidth: '440px', margin: '3rem auto', padding: '0 1rem' }}>
       <div
         className="vintage-paper"
         style={{
@@ -76,123 +71,35 @@ export default function LoginPage() {
           boxShadow: 'var(--paper-shadow-lg)',
         }}
       >
-        {/* Banner */}
-        <div
-          style={{
-            textAlign: 'center',
-            marginBottom: '1.75rem',
-            borderBottom: '3px double var(--border-sepia-dark)',
-            paddingBottom: '1.25rem',
-          }}
-        >
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: '2rem', borderBottom: '3px double var(--border-sepia-dark)', paddingBottom: '1.25rem' }}>
           <img
             src="/bureau_crest.jpg"
-            alt="The Daily Bureau Crest"
+            alt="The Daily Bureau"
             style={{
-              width: '64px',
-              height: '64px',
-              borderRadius: '50%',
-              border: '2px solid var(--brass-gold)',
-              boxShadow: 'var(--paper-shadow)',
-              objectFit: 'cover',
-              margin: '0 auto 0.75rem',
-              display: 'block',
+              width: '64px', height: '64px', borderRadius: '50%',
+              border: '2px solid var(--brass-gold)', boxShadow: 'var(--paper-shadow)',
+              objectFit: 'cover', margin: '0 auto 0.75rem', display: 'block',
             }}
           />
-          <div
-            className="typewriter-text"
-            style={{
-              fontSize: '0.72rem',
-              fontWeight: 700,
-              color: 'var(--brass-dark)',
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-            }}
-          >
-            Personnel Verification & Access Desk
+          <div className="typewriter-text" style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--brass-dark)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+            Personnel Verification Desk
           </div>
-          <h2
-            className="serif-display"
-            style={{ fontSize: '1.85rem', fontWeight: 800, marginTop: '0.25rem' }}
-          >
+          <h2 className="serif-display" style={{ fontSize: '1.85rem', fontWeight: 800, marginTop: '0.25rem' }}>
             Sign In to Workstation
           </h2>
           <p style={{ fontSize: '0.82rem', color: 'var(--ink-secondary)', marginTop: '0.35rem' }}>
-            Enter your official credentials to access your daily tasks or administrative ledger.
+            Enter your username and password to access your daily tasks.
           </p>
-        </div>
-
-        {/* Quick Fill Preset Credentials */}
-        <div
-          style={{
-            backgroundColor: 'var(--bg-parchment)',
-            border: '1px dashed var(--border-brass)',
-            borderRadius: '4px',
-            padding: '0.75rem 1rem',
-            marginBottom: '1.5rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.65rem',
-          }}
-        >
-          <div style={{ fontSize: '0.75rem', color: 'var(--ink-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <div>
-              <span className="typewriter-text" style={{ fontWeight: 700, color: 'var(--stamp-red)' }}>
-                BUREAU ADMIN:
-              </span>{' '}
-              <span className="typewriter-text">admin</span> / <span className="typewriter-text">password</span>
-            </div>
-            <button
-              type="button"
-              onClick={handleFillAdmin}
-              className="btn-parchment"
-              style={{ padding: '0.3rem 0.6rem', fontSize: '0.7rem' }}
-            >
-              <Sparkles size={12} style={{ color: 'var(--stamp-red)' }} />
-              <span>Fill Admin</span>
-            </button>
-          </div>
-
-          <div style={{ borderTop: '1px dashed var(--border-sepia)', paddingTop: '0.5rem', fontSize: '0.75rem', color: 'var(--ink-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <div>
-              <span className="typewriter-text" style={{ fontWeight: 700, color: 'var(--stamp-blue)' }}>
-                TEAM ARTISAN:
-              </span>{' '}
-              <span className="typewriter-text">arthur</span> / <span className="typewriter-text">password</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                playTypewriterClick();
-                setUsername('arthur');
-                setPassword('password');
-                setErrorMsg('');
-              }}
-              className="btn-parchment"
-              style={{ padding: '0.3rem 0.6rem', fontSize: '0.7rem' }}
-            >
-              <Sparkles size={12} style={{ color: 'var(--stamp-blue)' }} />
-              <span>Fill Arthur</span>
-            </button>
-          </div>
         </div>
 
         {/* Error Alert */}
         {errorMsg && (
-          <div
-            style={{
-              backgroundColor: 'var(--stamp-red-bg)',
-              border: '1px solid var(--stamp-red)',
-              borderRadius: '4px',
-              padding: '0.65rem 0.85rem',
-              marginBottom: '1.25rem',
-              fontSize: '0.8rem',
-              color: 'var(--stamp-red)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-            }}
-          >
+          <div style={{
+            backgroundColor: 'var(--stamp-red-bg)', border: '1px solid var(--stamp-red)',
+            borderRadius: '4px', padding: '0.65rem 0.85rem', marginBottom: '1.25rem',
+            fontSize: '0.8rem', color: 'var(--stamp-red)', display: 'flex', alignItems: 'center', gap: '0.5rem',
+          }}>
             <ShieldAlert size={16} />
             <span>{errorMsg}</span>
           </div>
@@ -201,20 +108,21 @@ export default function LoginPage() {
         {/* Login Form */}
         <form onSubmit={handleLogin}>
           <div style={{ marginBottom: '1.25rem' }}>
-            <label className="vintage-label">Artisan or Officer Username *</label>
+            <label className="vintage-label">Username *</label>
             <input
               type="text"
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="e.g. admin or arthur"
+              placeholder="Enter your username"
               className="vintage-input"
               autoFocus
+              autoComplete="username"
             />
           </div>
 
           <div style={{ marginBottom: '1.75rem' }}>
-            <label className="vintage-label">Authorization Passkey / Password *</label>
+            <label className="vintage-label">Password *</label>
             <input
               type="password"
               required
@@ -222,29 +130,31 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               className="vintage-input"
+              autoComplete="current-password"
             />
           </div>
 
           <button
             type="submit"
             className="btn-brass"
-            style={{ width: '100%', padding: '0.75rem', justifyContent: 'center' }}
+            disabled={isLoading}
+            style={{ width: '100%', padding: '0.75rem', justifyContent: 'center', opacity: isLoading ? 0.7 : 1 }}
           >
             <KeyRound size={16} />
-            <span>Sign In to Workstation</span>
+            <span>{isLoading ? 'Signing In...' : 'Sign In to Workstation'}</span>
             <ArrowRight size={15} />
           </button>
-
-          <div style={{ textAlign: 'center', marginTop: '1.25rem' }}>
-            <Link
-              href="/"
-              className="typewriter-text"
-              style={{ fontSize: '0.75rem', color: 'var(--ink-secondary)', textDecoration: 'underline' }}
-            >
-              ← Return to Master Work Desk
-            </Link>
-          </div>
         </form>
+
+        {/* Help note */}
+        <div style={{
+          marginTop: '1.5rem', padding: '0.75rem', backgroundColor: 'var(--bg-parchment)',
+          border: '1px dashed var(--border-sepia)', borderRadius: '4px',
+          fontSize: '0.76rem', color: 'var(--ink-secondary)', textAlign: 'center', lineHeight: 1.5,
+        }}>
+          <BookOpen size={13} style={{ display: 'inline', marginRight: '0.35rem', color: 'var(--brass-dark)' }} />
+          Don't have an account? Contact your Bureau Administrator to get your credentials.
+        </div>
       </div>
     </div>
   );
