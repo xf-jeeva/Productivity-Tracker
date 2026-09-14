@@ -2,7 +2,7 @@
 
 import { User, Task, DailyWorkLog, Role, TokenTransaction, RewardClaim, PayoutMethod, ClaimStatus, StickyNote, StickyColor } from '../types';
 import { INITIAL_USERS, INITIAL_TASKS, INITIAL_LOGS, INITIAL_TOKEN_TRANSACTIONS, INITIAL_REWARD_CLAIMS } from './mockData';
-import { pushCloudUsers, deleteCloudUser, isSupabaseConfigured } from './cloudUsers';
+import { pushCloudUsers, pushSingleCloudUser, deleteCloudUser, isSupabaseConfigured } from './cloudUsers';
 import { pushCloudTask, deleteCloudTask } from './cloudTasks';
 import { pushCloudNote, deleteCloudNote } from './cloudNotes';
 
@@ -168,9 +168,10 @@ export function createUser(data: {
   if (isBrowser) {
     localStorage.setItem(USERS_KEY, JSON.stringify(users));
   }
-  // Sync to Firebase so all devices see this new user
+  // Sync to Supabase so all devices see this new user
   if (isSupabaseConfigured) {
-    pushCloudUsers(users).catch(() => {/* silently ignore */});
+    pushSingleCloudUser(newUser).catch(() => {});
+    pushCloudUsers(users).catch(() => {});
   }
   emitSync();
   return { success: true, user: newUser };
@@ -203,7 +204,10 @@ export function updateUserRole(userId: string, newRole: Role): boolean {
     setCurrentUser(current);
   }
 
-  if (isSupabaseConfigured) pushCloudUsers(users).catch(() => {});
+  if (isSupabaseConfigured) {
+    pushSingleCloudUser(users[index]).catch(() => {});
+    pushCloudUsers(users).catch(() => {});
+  }
   emitSync();
   return true;
 }
@@ -224,7 +228,10 @@ export function updateUserPassword(userId: string, newPassword: string): boolean
     setCurrentUser(current);
   }
 
-  if (isSupabaseConfigured) pushCloudUsers(users).catch(() => {});
+  if (isSupabaseConfigured) {
+    pushSingleCloudUser(users[index]).catch(() => {});
+    pushCloudUsers(users).catch(() => {});
+  }
   emitSync();
   return true;
 }

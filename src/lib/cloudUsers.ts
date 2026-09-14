@@ -72,6 +72,23 @@ export async function fetchCloudUsers(): Promise<User[] | null> {
   }
 }
 
+// ── Upsert a single user ──────────────────────────────────────────────────
+export async function pushSingleCloudUser(user: User): Promise<boolean> {
+  if (!isSupabaseConfigured || !supabase) return false;
+  try {
+    const row = userToRow(user);
+    const { error } = await supabase.from(TABLE).upsert(row, { onConflict: 'id' });
+    if (error) {
+      console.warn('[Supabase] pushSingleCloudUser:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn('[Supabase] pushSingleCloudUser failed', e);
+    return false;
+  }
+}
+
 // ── Upsert all users (used when admin creates a user) ─────────────────────
 export async function pushCloudUsers(users: User[]): Promise<void> {
   if (!isSupabaseConfigured || !supabase) return;
