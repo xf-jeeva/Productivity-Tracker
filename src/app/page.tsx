@@ -13,6 +13,7 @@ import TaskCard from '@/components/TaskCard';
 import TaskModal from '@/components/TaskModal';
 import TokenPurseWidget from '@/components/TokenPurseWidget';
 import ClaimRewardModal from '@/components/ClaimRewardModal';
+import StickyNotesSection from '@/components/StickyNotesSection';
 import { playTypewriterClick } from '@/lib/sound';
 import { 
   CheckCircle2, 
@@ -531,13 +532,15 @@ export default function MyDeskPage() {
 
       {/* CONTENT AREA */}
       {activeView === 'active' ? (
-        /* ACTIVE VIEW: TWO DISTINCT EDITABLE SECTIONS (DAILY TASKS & DAILY ROUTINES) */
+        /* ACTIVE VIEW: TWO DISTINCT EDITABLE SECTIONS (DAILY TASKS & DAILY ROUTINES) + STICKY NOTES */
+        <>
         <div
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
             gap: '1.5rem',
             alignItems: 'start',
+            marginBottom: '1.5rem',
           }}
         >
           {/* SECTION 1: DAILY TASKS */}
@@ -709,9 +712,22 @@ export default function MyDeskPage() {
                   Add Daily Routine
                 </button>
               </div>
-            )}
+              )}
           </div>
         </div>
+
+        {/* SECTION 3: STICKY NOTES — Full width below the two columns */}
+        <div
+          className="vintage-paper"
+          style={{
+            padding: '1.25rem',
+            borderTop: '4px solid #f59e0b',
+            backgroundColor: 'var(--bg-card)',
+          }}
+        >
+          <StickyNotesSection userId={currentUser.id} />
+        </div>
+        </>
       ) : activeView === 'completed' ? (
         /* COMPLETED TASKS VIEW (SAVED SEPARATELY) */
         <div

@@ -1,6 +1,6 @@
 'use client';
 
-import { User, Task, DailyWorkLog, Role, TokenTransaction, RewardClaim, PayoutMethod, ClaimStatus } from '../types';
+import { User, Task, DailyWorkLog, Role, TokenTransaction, RewardClaim, PayoutMethod, ClaimStatus, StickyNote, StickyColor } from '../types';
 import { INITIAL_USERS, INITIAL_TASKS, INITIAL_LOGS, INITIAL_TOKEN_TRANSACTIONS, INITIAL_REWARD_CLAIMS } from './mockData';
 
 const USERS_KEY = 'daily_bureau_users_v3';
@@ -10,6 +10,7 @@ const CURRENT_USER_KEY = 'daily_bureau_current_user_v3';
 const SOUND_ENABLED_KEY = 'daily_bureau_sound_enabled_v3';
 const TOKEN_TRANSACTIONS_KEY = 'daily_bureau_token_transactions_v3';
 const REWARD_CLAIMS_KEY = 'daily_bureau_reward_claims_v3';
+const STICKY_NOTES_KEY = 'daily_bureau_sticky_notes_v3';
 
 export const BUREAU_SYNC_EVENT = 'daily_bureau_sync_event';
 export const TOKEN_AWARD_EVENT = 'daily_bureau_token_awarded';
@@ -836,3 +837,53 @@ export function resetBureauData(): void {
   emitSync();
 }
 
+// ─── STICKY NOTES ────────────────────────────────────────────────────────────
+
+export function getStickyNotes(userId: string): StickyNote[] {
+  if (!isBrowser) return [];
+  const stored = localStorage.getItem(STICKY_NOTES_KEY);
+  const all: StickyNote[] = stored ? JSON.parse(stored) : [];
+  return all.filter((n) => n.userId === userId).sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  });
+}
+
+export function createStickyNote(userId: string, content: string, color: StickyColor = 'yellow'): StickyNote {
+  const stored = localStorage.getItem(STICKY_NOTES_KEY);
+  const all: StickyNote[] = stored ? JSON.parse(stored) : [];
+  const note: StickyNote = {
+    id: `note_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    userId,
+    content,
+    color,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    pinned: false,
+  };
+  all.push(note);
+  localStorage.setItem(STICKY_NOTES_KEY, JSON.stringify(all));
+  emitSync();
+  return note;
+}
+
+export function updateStickyNote(noteId: string, updates: Partial<Pick<StickyNote, 'content' | 'color' | 'pinned'>>): void {
+  if (!isBrowser) return;
+  const stored = localStorage.getItem(STICKY_NOTES_KEY);
+  const all: StickyNote[] = stored ? JSON.parse(stored) : [];
+  const idx = all.findIndex((n) => n.id === noteId);
+  if (idx !== -1) {
+    all[idx] = { ...all[idx], ...updates, updatedAt: new Date().toISOString() };
+    localStorage.setItem(STICKY_NOTES_KEY, JSON.stringify(all));
+    emitSync();
+  }
+}
+
+export function deleteStickyNote(noteId: string): void {
+  if (!isBrowser) return;
+  const stored = localStorage.getItem(STICKY_NOTES_KEY);
+  const all: StickyNote[] = stored ? JSON.parse(stored) : [];
+  localStorage.setItem(STICKY_NOTES_KEY, JSON.stringify(all.filter((n) => n.id !== noteId)));
+  emitSync();
+}

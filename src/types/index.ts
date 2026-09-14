@@ -116,3 +116,14 @@ export interface TeamStats {
   completionRate: number;
 }
 
+export type StickyColor = 'yellow' | 'green' | 'blue' | 'pink' | 'orange' | 'purple';
+
+export interface StickyNote {
+  id: string;
+  userId: string;
+  content: string;
+  color: StickyColor;
+  createdAt: string;
+  updatedAt: string;
+  pinned?: boolean;
+}
