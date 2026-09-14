@@ -101,7 +101,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Default Bureau Administrator Key Indicator */}
+        {/* Quick Fill Preset Credentials */}
         <div
           style={{
             backgroundColor: 'var(--bg-parchment)',
@@ -110,29 +110,50 @@ export default function LoginPage() {
             padding: '0.75rem 1rem',
             marginBottom: '1.5rem',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '0.5rem',
+            flexDirection: 'column',
+            gap: '0.65rem',
           }}
         >
-          <div>
-            <div className="typewriter-text" style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--stamp-red)' }}>
-              MASTER ADMINISTRATOR ACCESS:
+          <div style={{ fontSize: '0.75rem', color: 'var(--ink-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div>
+              <span className="typewriter-text" style={{ fontWeight: 700, color: 'var(--stamp-red)' }}>
+                BUREAU ADMIN:
+              </span>{' '}
+              <span className="typewriter-text">admin</span> / <span className="typewriter-text">password</span>
             </div>
-            <div className="typewriter-text" style={{ fontSize: '0.72rem', color: 'var(--ink-secondary)' }}>
-              Username: <strong style={{ color: 'var(--ink-primary)' }}>admin</strong> | Passkey: <strong style={{ color: 'var(--ink-primary)' }}>password</strong>
-            </div>
+            <button
+              type="button"
+              onClick={handleFillAdmin}
+              className="btn-parchment"
+              style={{ padding: '0.3rem 0.6rem', fontSize: '0.7rem' }}
+            >
+              <Sparkles size={12} style={{ color: 'var(--stamp-red)' }} />
+              <span>Fill Admin</span>
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={handleFillAdmin}
-            className="btn-parchment"
-            style={{ padding: '0.35rem 0.75rem', fontSize: '0.72rem' }}
-          >
-            <Sparkles size={12} style={{ color: 'var(--stamp-red)' }} />
-            <span>Fill Admin</span>
-          </button>
+
+          <div style={{ borderTop: '1px dashed var(--border-sepia)', paddingTop: '0.5rem', fontSize: '0.75rem', color: 'var(--ink-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div>
+              <span className="typewriter-text" style={{ fontWeight: 700, color: 'var(--stamp-blue)' }}>
+                TEAM ARTISAN:
+              </span>{' '}
+              <span className="typewriter-text">arthur</span> / <span className="typewriter-text">password</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                playTypewriterClick();
+                setUsername('arthur');
+                setPassword('password');
+                setErrorMsg('');
+              }}
+              className="btn-parchment"
+              style={{ padding: '0.3rem 0.6rem', fontSize: '0.7rem' }}
+            >
+              <Sparkles size={12} style={{ color: 'var(--stamp-blue)' }} />
+              <span>Fill Arthur</span>
+            </button>
+          </div>
         </div>
 
         {/* Error Alert */}
@@ -165,7 +186,7 @@ export default function LoginPage() {
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="e.g. admin or username"
+              placeholder="e.g. admin or arthur"
               className="vintage-input"
               autoFocus
             />
