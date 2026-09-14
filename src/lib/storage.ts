@@ -3,13 +3,13 @@
 import { User, Task, DailyWorkLog, Role, TokenTransaction, RewardClaim, PayoutMethod, ClaimStatus } from '../types';
 import { INITIAL_USERS, INITIAL_TASKS, INITIAL_LOGS, INITIAL_TOKEN_TRANSACTIONS, INITIAL_REWARD_CLAIMS } from './mockData';
 
-const USERS_KEY = 'daily_bureau_users_v2';
-const TASKS_KEY = 'daily_bureau_tasks_v2';
-const LOGS_KEY = 'daily_bureau_logs_v2';
-const CURRENT_USER_KEY = 'daily_bureau_current_user_v2';
-const SOUND_ENABLED_KEY = 'daily_bureau_sound_enabled_v2';
-const TOKEN_TRANSACTIONS_KEY = 'daily_bureau_token_transactions_v2';
-const REWARD_CLAIMS_KEY = 'daily_bureau_reward_claims_v2';
+const USERS_KEY = 'daily_bureau_users_v3';
+const TASKS_KEY = 'daily_bureau_tasks_v3';
+const LOGS_KEY = 'daily_bureau_logs_v3';
+const CURRENT_USER_KEY = 'daily_bureau_current_user_v3';
+const SOUND_ENABLED_KEY = 'daily_bureau_sound_enabled_v3';
+const TOKEN_TRANSACTIONS_KEY = 'daily_bureau_token_transactions_v3';
+const REWARD_CLAIMS_KEY = 'daily_bureau_reward_claims_v3';
 
 export const BUREAU_SYNC_EVENT = 'daily_bureau_sync_event';
 export const TOKEN_AWARD_EVENT = 'daily_bureau_token_awarded';
@@ -20,8 +20,30 @@ function emitSync() {
   }
 }
 
-
 const isBrowser = typeof window !== 'undefined';
+
+// Auto-purge legacy mock data from older versions to ensure a completely fresh bureau
+if (isBrowser) {
+  try {
+    const legacyKeys = [
+      'daily_bureau_users',
+      'daily_bureau_tasks',
+      'daily_bureau_logs',
+      'daily_bureau_current_user',
+      'daily_bureau_token_transactions',
+      'daily_bureau_reward_claims',
+      'daily_bureau_users_v2',
+      'daily_bureau_tasks_v2',
+      'daily_bureau_logs_v2',
+      'daily_bureau_current_user_v2',
+      'daily_bureau_token_transactions_v2',
+      'daily_bureau_reward_claims_v2',
+    ];
+    legacyKeys.forEach((k) => localStorage.removeItem(k));
+  } catch (err) {
+    console.error('Legacy storage purge error:', err);
+  }
+}
 
 // ==================== USERS & AUTH ====================
 export function getUsers(): User[] {

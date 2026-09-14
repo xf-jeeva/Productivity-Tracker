@@ -12,6 +12,7 @@ import {
   deleteUser,
   deleteTask,
   restoreTask,
+  resetBureauData,
   BUREAU_SYNC_EVENT,
   getUserTasksBreakdown,
   getRewardClaims,
@@ -91,6 +92,7 @@ export default function AdminDashboardPage() {
   // User Decommission Modal state
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [deleteNotice, setDeleteNotice] = useState<string>('');
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
   // Expanded columns state per user: { [user_columnKey]: boolean }
   const [expandedColumns, setExpandedColumns] = useState<Record<string, boolean>>({});
@@ -211,6 +213,16 @@ export default function AdminDashboardPage() {
       alert(res.error || 'Failed to decommission user.');
       setUserToDelete(null);
     }
+  };
+
+  // Confirm and execute full reset
+  const handleConfirmReset = () => {
+    playRubberStampSound();
+    resetBureauData();
+    setSelectedUsername('all');
+    setDeleteNotice('Bureau Ledger and registry have been completely reset to a fresh slate.');
+    setIsResetModalOpen(false);
+    setTimeout(() => setDeleteNotice(''), 5000);
   };
 
   // If user is not admin
@@ -355,6 +367,19 @@ export default function AdminDashboardPage() {
             >
               <KeyRound size={14} style={{ color: 'var(--brass-gold)' }} />
               <span>Change Passkey</span>
+            </button>
+
+            <button
+              onClick={() => {
+                playTypewriterClick();
+                setIsResetModalOpen(true);
+              }}
+              className="btn-parchment"
+              style={{ padding: '0.55rem 0.85rem', fontSize: '0.78rem', color: 'var(--stamp-red)', borderColor: 'var(--stamp-red)' }}
+              title="Reset all tasks and data to fresh"
+            >
+              <RotateCcw size={14} style={{ color: 'var(--stamp-red)' }} />
+              <span>Reset Fresh</span>
             </button>
           </div>
         </div>
@@ -1804,6 +1829,118 @@ export default function AdminDashboardPage() {
               >
                 <Trash2 size={14} />
                 <span>Confirm & Delete User</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Reset to Fresh State Confirmation Modal */}
+      {isResetModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(28, 20, 16, 0.72)',
+            backdropFilter: 'blur(3px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1.5rem',
+          }}
+          onClick={() => setIsResetModalOpen(false)}
+        >
+          <div
+            className="vintage-paper"
+            style={{
+              maxWidth: '480px',
+              width: '100%',
+              padding: '2rem',
+              backgroundColor: 'var(--bg-card)',
+              borderTop: '5px solid var(--stamp-red)',
+              boxShadow: 'var(--paper-shadow-lg)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
+              <div
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  backgroundColor: 'var(--stamp-red-bg)',
+                  color: 'var(--stamp-red)',
+                  border: '2px solid var(--stamp-red)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <RotateCcw size={20} />
+              </div>
+              <div>
+                <div
+                  className="typewriter-text"
+                  style={{
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    color: 'var(--stamp-red)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                  }}
+                >
+                  BUREAU SYSTEM RE-INITIALIZATION
+                </div>
+                <h3 className="serif-display" style={{ fontSize: '1.35rem', fontWeight: 800, margin: 0 }}>
+                  Reset Ledger to Fresh Slate
+                </h3>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '0.85rem', color: 'var(--ink-secondary)', lineHeight: 1.5, marginBottom: '1rem' }}>
+              This will wipe all existing tasks, routines, logs, and claims, resetting the Bureau to a 100% fresh registry. Master Administrator (<code className="typewriter-text">@admin / password</code>) is preserved.
+            </p>
+
+            <div
+              style={{
+                backgroundColor: 'var(--stamp-red-bg)',
+                border: '1px dashed var(--stamp-red)',
+                padding: '0.75rem',
+                borderRadius: '3px',
+                marginBottom: '1.25rem',
+                fontSize: '0.78rem',
+                color: 'var(--stamp-red)',
+                fontWeight: 600,
+              }}
+            >
+              ⚠️ All temporary test tasks, routines, and records will be purged.
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                type="button"
+                onClick={() => setIsResetModalOpen(false)}
+                className="btn-parchment"
+                style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReset}
+                className="btn-brass"
+                style={{
+                  padding: '0.5rem 1.15rem',
+                  fontSize: '0.8rem',
+                  backgroundColor: 'var(--stamp-red)',
+                  borderColor: 'var(--stamp-red)',
+                  color: '#ffffff',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                }}
+              >
+                <RotateCcw size={14} />
+                <span>Confirm & Reset Fresh</span>
               </button>
             </div>
           </div>
