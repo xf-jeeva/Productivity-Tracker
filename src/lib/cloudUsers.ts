@@ -114,4 +114,48 @@ export function subscribeCloudUsers(callback: (users: User[]) => void): (() => v
   return () => { supabase?.removeChannel(channel); };
 }
 
+// ── Ensure the default admin always exists in Supabase ────────────────────
+// Called at login page init — upserts admin/password so it always works.
+export async function ensureAdminExists(): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) return;
+  try {
+    // Check if admin already exists in Supabase
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select('id')
+      .eq('username', 'admin')
+      .maybeSingle();
+
+    if (error) {
+      console.warn('[Supabase] ensureAdminExists check failed:', error.message);
+      return;
+    }
+
+    if (!data) {
+      // Admin missing from Supabase — insert the default admin row
+      const defaultAdmin = {
+        id:          'usr-admin',
+        username:    'admin',
+        password:    'password',
+        name:        'Bureau Administrator',
+        role:        'admin',
+        title:       'Chief Bureau Administrator & Master Inspector',
+        department:  'Dispatch & Logistics',
+        avatar:      'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+        desk_number: 'Office No. 01 — Executive Quarters',
+        signature:   'E. Sterling, Bureau Chief',
+        created_at:  '2026-09-01T08:00:00Z',
+      };
+      const { error: insertErr } = await supabase.from(TABLE).upsert(defaultAdmin, { onConflict: 'id' });
+      if (insertErr) {
+        console.warn('[Supabase] ensureAdminExists upsert failed:', insertErr.message);
+      } else {
+        console.log('[Supabase] Default admin seeded successfully.');
+      }
+    }
+  } catch (e) {
+    console.warn('[Supabase] ensureAdminExists failed', e);
+  }
+}
+
 export { isSupabaseConfigured };

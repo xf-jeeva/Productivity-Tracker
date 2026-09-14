@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { login, getCurrentUser } from '@/lib/storage';
-import { fetchCloudUsers } from '@/lib/cloudUsers';
+import { fetchCloudUsers, ensureAdminExists } from '@/lib/cloudUsers';
 import { playRubberStampSound } from '@/lib/sound';
 import { KeyRound, ShieldAlert, ArrowRight, BookOpen, Loader2 } from 'lucide-react';
 
@@ -30,6 +30,8 @@ export default function LoginPage() {
       // 2. Pre-sync Supabase users into localStorage so login works immediately
       try {
         setSyncing(true);
+        // Ensure the default admin row exists in Supabase (fixes invalid credential on fresh DB)
+        await ensureAdminExists();
         const cloudUsers = await fetchCloudUsers();
         if (cloudUsers && cloudUsers.length > 0) {
           // Merge cloud users into localStorage

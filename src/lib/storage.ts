@@ -3,6 +3,8 @@
 import { User, Task, DailyWorkLog, Role, TokenTransaction, RewardClaim, PayoutMethod, ClaimStatus, StickyNote, StickyColor } from '../types';
 import { INITIAL_USERS, INITIAL_TASKS, INITIAL_LOGS, INITIAL_TOKEN_TRANSACTIONS, INITIAL_REWARD_CLAIMS } from './mockData';
 import { pushCloudUsers, deleteCloudUser, isSupabaseConfigured } from './cloudUsers';
+import { pushCloudTask, deleteCloudTask } from './cloudTasks';
+import { pushCloudNote, deleteCloudNote } from './cloudNotes';
 
 const USERS_KEY = 'daily_bureau_users_v3';
 const TASKS_KEY = 'daily_bureau_tasks_v3';
@@ -321,6 +323,10 @@ export function createTask(taskData: {
   if (isBrowser) {
     localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
   }
+  // Sync to Supabase so all devices see this new task
+  if (isSupabaseConfigured) {
+    pushCloudTask(newTask).catch(() => {/* silently ignore */});
+  }
   emitSync();
   return newTask;
 }
@@ -333,6 +339,10 @@ export function updateTask(id: string, updates: Partial<Task>): Task | null {
   tasks[index] = { ...tasks[index], ...updates };
   if (isBrowser) {
     localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
+  }
+  // Sync update to Supabase
+  if (isSupabaseConfigured) {
+    pushCloudTask(tasks[index]).catch(() => {/* silently ignore */});
   }
   emitSync();
   return tasks[index];
@@ -424,6 +434,10 @@ export function deleteTask(taskId: string, deletedByUsername?: string): boolean 
   if (isBrowser) {
     localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
   }
+  // Sync soft-delete to Supabase (update status to 'deleted')
+  if (isSupabaseConfigured) {
+    pushCloudTask(tasks[index]).catch(() => {/* silently ignore */});
+  }
   emitSync();
   return true;
 }
@@ -455,6 +469,10 @@ export function permanentDeleteTask(taskId: string): boolean {
 
   if (isBrowser) {
     localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
+  }
+  // Hard delete from Supabase
+  if (isSupabaseConfigured) {
+    deleteCloudTask(taskId).catch(() => {/* silently ignore */});
   }
   emitSync();
   return true;
@@ -874,6 +892,10 @@ export function createStickyNote(userId: string, content: string, color: StickyC
   };
   all.push(note);
   localStorage.setItem(STICKY_NOTES_KEY, JSON.stringify(all));
+  // Sync to Supabase
+  if (isSupabaseConfigured) {
+    pushCloudNote(note).catch(() => {/* silently ignore */});
+  }
   emitSync();
   return note;
 }
@@ -886,6 +908,10 @@ export function updateStickyNote(noteId: string, updates: Partial<Pick<StickyNot
   if (idx !== -1) {
     all[idx] = { ...all[idx], ...updates, updatedAt: new Date().toISOString() };
     localStorage.setItem(STICKY_NOTES_KEY, JSON.stringify(all));
+    // Sync update to Supabase
+    if (isSupabaseConfigured) {
+      pushCloudNote(all[idx]).catch(() => {/* silently ignore */});
+    }
     emitSync();
   }
 }
@@ -895,6 +921,10 @@ export function deleteStickyNote(noteId: string): void {
   const stored = localStorage.getItem(STICKY_NOTES_KEY);
   const all: StickyNote[] = stored ? JSON.parse(stored) : [];
   localStorage.setItem(STICKY_NOTES_KEY, JSON.stringify(all.filter((n) => n.id !== noteId)));
+  // Hard delete from Supabase
+  if (isSupabaseConfigured) {
+    deleteCloudNote(noteId).catch(() => {/* silently ignore */});
+  }
   emitSync();
 }
 
