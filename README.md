@@ -54,20 +54,34 @@ npm run dev
 
 Visit [http://localhost:3000](http://localhost:3000) in your browser.
 
-### 3. Build for Production
+### 3. Build Static Export (for Cloudflare Pages)
 ```bash
 npm run build
-npm run start
 ```
+This generates the standalone `./out` static directory.
 
 ---
 
-## 🔐 Default Credentials
+## ☁️ Cloudflare Pages Deployment
+
+Deploy directly from GitHub in 1 minute:
+1. In Cloudflare Dashboard, navigate to **Compute (Workers & Pages)** > **Create application** > **Pages** > **Connect to Git**.
+2. Select your repository: `xf-jeeva/Productivity-Tracker`.
+3. Set build configuration:
+   - **Framework preset**: `None` (or `Next.js (Static HTML Export)`)
+   - **Build command**: `npm run build`
+   - **Build output directory**: `out`
+4. Click **Save and Deploy**.
+
+---
+
+## 🔐 Default Bureau Credentials
 
 | Role | Username | Password | Access Level |
 |:---|:---|:---|:---|
-| **Bureau Administrator** | `admin` | `password` | Full Administrative & Treasury Oversight |
-| **Team Member** | `arthur` | `password` | Work Desk, Routine, and Token Rewards |
+| **Bureau Administrator** | `admin` | `password` | Master Administrative, User Creation & Treasury Oversight |
+
+*Note: New team members can be created directly by the Administrator via **Admin Oversight**.*
 
 ---
 
