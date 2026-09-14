@@ -1,12 +1,14 @@
 {
   "name": "productivity-tracker",
   "version": "1.0.0",
-  "description": "",
+  "description": "The Daily Bureau - Vintage Team Work & Dispatch Ledger",
   "main": "index.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "deploy": "wrangler deploy",
+    "pages:deploy": "wrangler pages deploy out"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +26,7 @@
     "@types/node": "^26.5.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "wrangler": "^4.131.0"
   }
 }
