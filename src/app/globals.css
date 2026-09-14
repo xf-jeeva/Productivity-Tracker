@@ -1,0 +1,481 @@
+@import url('https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Vintage Parchment (Default) */
+  --bg-parchment: #f7f2e7;
+  --bg-parchment-deep: #eee6d3;
+  --bg-card: #fdfbf7;
+  --bg-card-alt: #f3ece0;
+  --bg-hover: #e8dfcb;
+  
+  --ink-primary: #1c1815;
+  --ink-secondary: #594f46;
+  --ink-muted: #8a7c6f;
+  --ink-faint: #b3a495;
+  
+  --border-sepia: #d9cdb8;
+  --border-sepia-dark: #b8a68d;
+  --border-brass: #b38234;
+
+  --brass-gold: #b38234;
+  --brass-dark: #825b1d;
+  --brass-light: #d8a658;
+  --brass-glow: rgba(179, 130, 52, 0.2);
+
+  --stamp-red: #a42a1f;
+  --stamp-red-bg: rgba(164, 42, 31, 0.08);
+  --stamp-green: #1d5236;
+  --stamp-green-bg: rgba(29, 82, 54, 0.08);
+  --stamp-blue: #234b6b;
+  --stamp-blue-bg: rgba(35, 75, 107, 0.08);
+  --stamp-amber: #b06915;
+  --stamp-amber-bg: rgba(176, 105, 21, 0.08);
+
+  --paper-shadow: 0 4px 16px rgba(45, 34, 21, 0.08), 0 1px 3px rgba(45, 34, 21, 0.05);
+  --paper-shadow-lg: 0 12px 36px rgba(45, 34, 21, 0.14), 0 2px 6px rgba(45, 34, 21, 0.08);
+  --paper-inset: inset 0 2px 5px rgba(0, 0, 0, 0.06);
+
+  --font-serif: 'Fraunces', Georgia, serif;
+  --font-mono: 'Courier Prime', 'Courier New', monospace;
+  --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+[data-theme='nocturne'] {
+  /* Smoked Walnut & Brass Study (Dark Mode) */
+  --bg-parchment: #13110f;
+  --bg-parchment-deep: #0e0c0b;
+  --bg-card: #1c1815;
+  --bg-card-alt: #24201b;
+  --bg-hover: #2e2822;
+
+  --ink-primary: #ede5d8;
+  --ink-secondary: #b8ab9a;
+  --ink-muted: #827565;
+  --ink-faint: #544b40;
+
+  --border-sepia: #332b22;
+  --border-sepia-dark: #473d31;
+  --border-brass: #c9933d;
+
+  --brass-gold: #c9933d;
+  --brass-dark: #9e7025;
+  --brass-light: #e5b263;
+  --brass-glow: rgba(201, 147, 61, 0.25);
+
+  --stamp-red: #d14736;
+  --stamp-red-bg: rgba(209, 71, 54, 0.16);
+  --stamp-green: #378059;
+  --stamp-green-bg: rgba(55, 128, 89, 0.16);
+  --stamp-blue: #407da8;
+  --stamp-blue-bg: rgba(64, 125, 168, 0.16);
+  --stamp-amber: #d4872c;
+  --stamp-amber-bg: rgba(212, 135, 44, 0.16);
+
+  --paper-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+  --paper-shadow-lg: 0 16px 44px rgba(0, 0, 0, 0.65);
+  --paper-inset: inset 0 2px 5px rgba(0, 0, 0, 0.4);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-parchment);
+  color: var(--ink-primary);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  background-image: 
+    radial-gradient(var(--border-sepia) 0.65px, transparent 0.65px),
+    radial-gradient(var(--border-sepia) 0.65px, var(--bg-parchment) 0.65px);
+  background-size: 26px 26px;
+  background-position: 0 0, 13px 13px;
+  min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  overflow-x: hidden;
+}
+
+/* Authentic Paper Card */
+.vintage-paper {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-sepia);
+  box-shadow: var(--paper-shadow);
+  border-radius: 4px;
+  position: relative;
+}
+
+.vintage-paper::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border: 1px solid rgba(184, 166, 141, 0.2);
+  pointer-events: none;
+  border-radius: 2px;
+}
+
+/* Double Ruled Header */
+.ruled-header {
+  border-bottom: 3px double var(--border-sepia);
+  padding-bottom: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+/* Stamped Labels & Typography */
+.typewriter-text {
+  font-family: var(--font-mono);
+  letter-spacing: -0.02em;
+}
+
+.serif-display {
+  font-family: var(--font-serif);
+}
+
+/* Vintage Brass Button */
+.btn-brass {
+  background: linear-gradient(180deg, var(--brass-light) 0%, var(--brass-gold) 60%, var(--brass-dark) 100%);
+  color: #17120a;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.65rem 1.25rem;
+  border: 1px solid #6b4a16;
+  border-radius: 3px;
+  box-shadow: 0 3px 0 #573b10, 0 5px 10px rgba(0,0,0,0.15);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.1s ease;
+  user-select: none;
+  text-decoration: none;
+}
+
+.btn-brass:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 0 #573b10, 0 7px 14px rgba(0,0,0,0.2);
+}
+
+.btn-brass:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #573b10, 0 2px 4px rgba(0,0,0,0.15);
+}
+
+/* Vintage Secondary Button */
+.btn-parchment {
+  background-color: var(--bg-card-alt);
+  color: var(--ink-primary);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.55rem 1.1rem;
+  border: 1px solid var(--border-sepia-dark);
+  border-radius: 3px;
+  box-shadow: 0 2px 0 var(--border-sepia-dark);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all 0.15s ease;
+  text-decoration: none;
+}
+
+.btn-parchment:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--brass-gold);
+}
+
+.btn-parchment:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+/* Rubber Stamp Styles */
+.rubber-stamp {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  padding: 0.35rem 0.85rem;
+  border-radius: 3px;
+  user-select: none;
+  border-width: 2px;
+  border-style: dashed;
+  position: relative;
+  line-height: 1;
+  text-shadow: 0 0 1px currentColor;
+}
+
+.rubber-stamp-completed {
+  color: var(--stamp-green);
+  border-color: var(--stamp-green);
+  background-color: var(--stamp-green-bg);
+  transform: rotate(-3.5deg);
+  box-shadow: 0 0 0 2px var(--stamp-green-bg);
+}
+
+.rubber-stamp-approved {
+  color: var(--stamp-red);
+  border-color: var(--stamp-red);
+  background-color: var(--stamp-red-bg);
+  transform: rotate(2deg);
+}
+
+.rubber-stamp-opus {
+  color: var(--stamp-amber);
+  border-color: var(--stamp-amber);
+  background-color: var(--stamp-amber-bg);
+}
+
+.rubber-stamp-urgent {
+  color: var(--stamp-red);
+  border-color: var(--stamp-red);
+  background-color: var(--stamp-red-bg);
+}
+
+.rubber-stamp-routine {
+  color: var(--stamp-blue);
+  border-color: var(--stamp-blue);
+  background-color: var(--stamp-blue-bg);
+}
+
+/* Slam Keyframe Animation */
+@keyframes stampSlam {
+  0% {
+    transform: scale(2.4) rotate(-15deg);
+    opacity: 0;
+  }
+  65% {
+    transform: scale(0.92) rotate(-2deg);
+    opacity: 1;
+  }
+  85% {
+    transform: scale(1.05) rotate(-4deg);
+  }
+  100% {
+    transform: scale(1) rotate(-3.5deg);
+    opacity: 1;
+  }
+}
+
+.animate-stamp {
+  animation: stampSlam 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* Ruled Ledger Lines for Lists */
+.ledger-ruled {
+  background-image: repeating-linear-gradient(
+    transparent,
+    transparent 31px,
+    var(--border-sepia) 31px,
+    var(--border-sepia) 32px
+  );
+  line-height: 32px;
+}
+
+/* Custom Vintage Scrollbar */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-parchment-deep);
+  border-left: 1px solid var(--border-sepia);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-sepia-dark);
+  border-radius: 2px;
+  border: 2px solid var(--bg-parchment-deep);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--brass-gold);
+}
+
+/* Form inputs with engraved inset look */
+.vintage-input {
+  background-color: var(--bg-parchment);
+  color: var(--ink-primary);
+  border: 1px solid var(--border-sepia-dark);
+  border-radius: 3px;
+  padding: 0.65rem 0.85rem;
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  box-shadow: var(--paper-inset);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+}
+
+.vintage-input:focus {
+  outline: none;
+  border-color: var(--brass-gold);
+  box-shadow: var(--paper-inset), 0 0 0 2px var(--brass-glow);
+}
+
+.vintage-textarea {
+  background-color: var(--bg-parchment);
+  color: var(--ink-primary);
+  border: 1px solid var(--border-sepia-dark);
+  border-radius: 3px;
+  padding: 0.75rem 0.85rem;
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  box-shadow: var(--paper-inset);
+  min-height: 90px;
+  resize: vertical;
+  width: 100%;
+}
+
+.vintage-textarea:focus {
+  outline: none;
+  border-color: var(--brass-gold);
+  box-shadow: var(--paper-inset), 0 0 0 2px var(--brass-glow);
+}
+
+/* Label styling */
+.vintage-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-secondary);
+  margin-bottom: 0.35rem;
+}
+
+/* Seal Ornament */
+.seal-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ca4b3b 0%, #872016 70%, #571008 100%);
+  border: 2px solid #3d0803;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.3), inset 0 1px 2px rgba(255,255,255,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f7e6d0;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.1rem;
+  text-shadow: 0 -1px 1px rgba(0,0,0,0.6);
+  flex-shrink: 0;
+}
+
+/* ==================== VINTAGE BRASS COIN & ANIMATIONS ==================== */
+@keyframes coinFlip3D {
+  0% {
+    transform: rotateY(0deg) scale(0.6);
+    opacity: 0;
+  }
+  20% {
+    transform: rotateY(360deg) scale(1.15);
+    opacity: 1;
+  }
+  50% {
+    transform: rotateY(720deg) scale(1.05);
+  }
+  75% {
+    transform: rotateY(1080deg) scale(1);
+  }
+  100% {
+    transform: rotateY(1440deg) scale(1);
+  }
+}
+
+@keyframes coinContinuousSpin {
+  0% {
+    transform: rotateY(0deg);
+  }
+  100% {
+    transform: rotateY(360deg);
+  }
+}
+
+@keyframes tokenFloatUp {
+  0% {
+    transform: translateY(15px) scale(0.9);
+    opacity: 0;
+  }
+  15% {
+    transform: translateY(-5px) scale(1.05);
+    opacity: 1;
+  }
+  30% {
+    transform: translateY(0) scale(1);
+  }
+  80% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-18px) scale(0.95);
+    opacity: 0;
+  }
+}
+
+@keyframes brassGlowPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(216, 166, 88, 0.7);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(216, 166, 88, 0);
+    transform: scale(1.05);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(216, 166, 88, 0);
+    transform: scale(1);
+  }
+}
+
+.vintage-coin {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fcedbd 0%, #d8a658 35%, #966723 75%, #59390a 100%);
+  border: 2px solid #57390f;
+  box-shadow: 
+    0 3px 6px rgba(0, 0, 0, 0.35),
+    inset 0 1px 2px rgba(255, 255, 255, 0.7),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.5);
+  color: #3f2504;
+  font-weight: 800;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4), 0 -1px 0 rgba(0, 0, 0, 0.4);
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.vintage-coin-inner {
+  border: 1px dashed rgba(63, 37, 4, 0.45);
+  border-radius: 50%;
+  width: 82%;
+  height: 82%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.coin-spin-anim {
+  animation: coinFlip3D 1.2s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+  transform-style: preserve-3d;
+}
+
+.token-pulse-glow {
+  animation: brassGlowPulse 1.2s ease-out;
+}
+
