@@ -195,13 +195,13 @@ export function updateUserRole(userId: string, newRole: Role): boolean {
     localStorage.setItem(USERS_KEY, JSON.stringify(users));
   }
 
-  // Update current user if modifying self
   const current = getCurrentUser();
   if (current && current.id === userId) {
     current.role = newRole;
     setCurrentUser(current);
   }
 
+  if (isSupabaseConfigured) pushCloudUsers(users).catch(() => {});
   emitSync();
   return true;
 }
@@ -216,13 +216,13 @@ export function updateUserPassword(userId: string, newPassword: string): boolean
     localStorage.setItem(USERS_KEY, JSON.stringify(users));
   }
 
-  // Update current user if modifying self
   const current = getCurrentUser();
   if (current && current.id === userId) {
     current.password = newPassword;
     setCurrentUser(current);
   }
 
+  if (isSupabaseConfigured) pushCloudUsers(users).catch(() => {});
   emitSync();
   return true;
 }

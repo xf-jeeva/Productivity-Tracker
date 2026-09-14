@@ -3,36 +3,52 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { login, getCurrentUser } from '@/lib/storage';
+import { fetchCloudUsers } from '@/lib/cloudUsers';
 import { playRubberStampSound } from '@/lib/sound';
-import { KeyRound, ShieldAlert, ArrowRight, BookOpen } from 'lucide-react';
+import { KeyRound, ShieldAlert, ArrowRight, BookOpen, Loader2 } from 'lucide-react';
+
+const USERS_KEY = 'daily_bureau_users_v3';
 
 export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-  const [checking, setChecking] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
+  const [checking, setChecking] = useState(true);   // session check
+  const [syncing, setSyncing] = useState(false);     // syncing users from Supabase before login
+  const [isLoading, setIsLoading] = useState(false); // submit button loading
 
-  // If already logged in, redirect immediately
   useEffect(() => {
-    const user = getCurrentUser();
-    if (user) {
-      router.replace(user.role === 'admin' ? '/admin' : '/');
-    } else {
-      setChecking(false);
-    }
-  }, [router]);
+    const init = async () => {
+      // 1. If already logged in — go straight to their page
+      const user = getCurrentUser();
+      if (user) {
+        router.replace(user.role === 'admin' ? '/admin' : '/');
+        return;
+      }
 
-  if (checking) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-        <div className="typewriter-text" style={{ fontSize: '0.85rem', color: 'var(--ink-secondary)', letterSpacing: '0.1em' }}>
-          AUTHENTICATING...
-        </div>
-      </div>
-    );
-  }
+      // 2. Pre-sync Supabase users into localStorage so login works immediately
+      try {
+        setSyncing(true);
+        const cloudUsers = await fetchCloudUsers();
+        if (cloudUsers && cloudUsers.length > 0) {
+          // Merge cloud users into localStorage
+          const stored = localStorage.getItem(USERS_KEY);
+          const localUsers = stored ? JSON.parse(stored) : [];
+          const cloudIds = new Set(cloudUsers.map((u: {id: string}) => u.id));
+          const localOnly = localUsers.filter((u: {id: string}) => !cloudIds.has(u.id));
+          localStorage.setItem(USERS_KEY, JSON.stringify([...cloudUsers, ...localOnly]));
+        }
+      } catch {
+        // Supabase not configured or offline — login with local users only
+      } finally {
+        setSyncing(false);
+        setChecking(false);
+      }
+    };
+
+    init();
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,12 +69,23 @@ export default function LoginPage() {
     }
 
     playRubberStampSound();
-    if (res.user?.role === 'admin') {
-      router.push('/admin');
-    } else {
-      router.push('/');
-    }
+    router.push(res.user?.role === 'admin' ? '/admin' : '/');
   };
+
+  // Loading / session check screen
+  if (checking) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: '0.75rem' }}>
+        <div className="typewriter-text" style={{ fontSize: '0.82rem', color: 'var(--ink-secondary)', letterSpacing: '0.1em' }}>
+          {syncing ? 'SYNCING BUREAU REGISTRY...' : 'AUTHENTICATING...'}
+        </div>
+        <div style={{ width: '180px', height: '2px', backgroundColor: 'var(--border-sepia)', borderRadius: '2px', overflow: 'hidden' }}>
+          <div style={{ height: '100%', backgroundColor: 'var(--brass-gold)', animation: 'loadingBar 1.4s ease-in-out infinite', borderRadius: '2px' }} />
+        </div>
+        <style>{`@keyframes loadingBar { 0%{width:0;margin-left:0} 50%{width:60%;margin-left:20%} 100%{width:0;margin-left:100%} }`}</style>
+      </div>
+    );
+  }
 
   return (
     <div style={{ maxWidth: '440px', margin: '3rem auto', padding: '0 1rem' }}>
@@ -138,11 +165,12 @@ export default function LoginPage() {
             type="submit"
             className="btn-brass"
             disabled={isLoading}
-            style={{ width: '100%', padding: '0.75rem', justifyContent: 'center', opacity: isLoading ? 0.7 : 1 }}
+            style={{ width: '100%', padding: '0.75rem', justifyContent: 'center', opacity: isLoading ? 0.75 : 1 }}
           >
-            <KeyRound size={16} />
-            <span>{isLoading ? 'Signing In...' : 'Sign In to Workstation'}</span>
-            <ArrowRight size={15} />
+            {isLoading
+              ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /><span>Signing In...</span></>
+              : <><KeyRound size={16} /><span>Sign In to Workstation</span><ArrowRight size={15} /></>
+            }
           </button>
         </form>
 
@@ -153,9 +181,10 @@ export default function LoginPage() {
           fontSize: '0.76rem', color: 'var(--ink-secondary)', textAlign: 'center', lineHeight: 1.5,
         }}>
           <BookOpen size={13} style={{ display: 'inline', marginRight: '0.35rem', color: 'var(--brass-dark)' }} />
-          Don't have an account? Contact your Bureau Administrator to get your credentials.
+          Don&apos;t have an account? Contact your Bureau Administrator to get your credentials.
         </div>
       </div>
+      <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
     </div>
   );
 }
