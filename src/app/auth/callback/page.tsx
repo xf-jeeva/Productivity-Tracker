@@ -21,19 +21,25 @@ export default function AuthCallbackPage() {
       }
 
       try {
-        // Exchange the auth code for a session
-        const { error } = await supabase.auth.exchangeCodeForSession(
-          window.location.href
-        );
-
-        if (error) {
-          console.error('Auth callback error:', error.message);
-          setStatus('Sign-in failed. Redirecting...');
-          setTimeout(() => router.replace('/login'), 2000);
-          return;
+        // Check if there is an auth code to exchange
+        const hasCode = window.location.search.includes('code=');
+        if (hasCode) {
+          const { error } = await supabase.auth.exchangeCodeForSession(
+            window.location.href
+          );
+          if (error) {
+            console.warn('exchangeCodeForSession notice:', error.message);
+          }
         }
 
-        setStatus('Fetching your profile...');
+        // Verify active session exists
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          // Allow detectSessionInUrl a moment to complete if needed
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+
+        setStatus('Fetching your clearance profile...');
         const user = await getAuthUser();
 
         if (!user) {
@@ -42,8 +48,8 @@ export default function AuthCallbackPage() {
         }
 
         setStatus(`Welcome, ${user.name}!`);
-        // Admin → /admin, everyone else → /
-        setTimeout(() => router.replace(user.role === 'admin' ? '/admin' : '/'), 500);
+        // Default entry point is ALWAYS the main workstation desk (/)
+        setTimeout(() => router.replace('/'), 500);
       } catch (err) {
         console.error('Callback processing error:', err);
         router.replace('/login');

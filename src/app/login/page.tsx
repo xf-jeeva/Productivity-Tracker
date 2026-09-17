@@ -16,7 +16,7 @@ export default function LoginPage() {
     // If already signed in, go to their page immediately
     getAuthUser().then((user) => {
       if (user) {
-        router.replace(user.role === 'admin' ? '/admin' : '/');
+        router.replace('/');
       } else {
         setChecking(false);
       }

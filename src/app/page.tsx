@@ -3,12 +3,12 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/AuthProvider';
 import { 
-  getCurrentUser, 
   getTasks, 
   BUREAU_SYNC_EVENT 
 } from '@/lib/storage';
-import { Task, User, ItemType } from '@/types';
+import { Task, ItemType } from '@/types';
 import TaskCard from '@/components/TaskCard';
 import TaskModal from '@/components/TaskModal';
 import TokenPurseWidget from '@/components/TokenPurseWidget';
@@ -38,54 +38,48 @@ import {
 
 export default function MyDeskPage() {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const { user: currentUser, loading: authLoading } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Navigation view: 'active' (Shows Daily Tasks & Daily Routines sections) | 'completed' (Saved separately) | 'deleted'
   const [activeView, setActiveView] = useState<'active' | 'completed' | 'deleted'>('active');
   const [searchQuery, setSearchQuery] = useState('');
   const [deskNotes, setDeskNotes] = useState('');
 
-  // Modal State
   const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
   const [modalDefaultType, setModalDefaultType] = useState<ItemType>('task');
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
 
-
   useEffect(() => {
+    if (!authLoading && !currentUser) {
+      router.replace('/login');
+      return;
+    }
+    if (!currentUser) return;
+
     const sync = () => {
-      const user = getCurrentUser();
-      if (!user) {
-        router.replace('/login');
-        return;
-      }
-      setCurrentUser(user);
       setTasks(getTasks());
       setIsLoading(false);
     };
-
     sync();
     window.addEventListener(BUREAU_SYNC_EVENT, sync);
 
-    const savedNotes = localStorage.getItem('daily_bureau_desk_notes');
+    const savedNotes = localStorage.getItem(`bureau_desk_notes_${currentUser.id}`);
     if (savedNotes) setDeskNotes(savedNotes);
 
     return () => window.removeEventListener(BUREAU_SYNC_EVENT, sync);
-  }, [router]);
+  }, [currentUser, authLoading, router]);
 
   const handleSaveNotes = (val: string) => {
     setDeskNotes(val);
-    localStorage.setItem('daily_bureau_desk_notes', val);
+    localStorage.setItem(`bureau_desk_notes_${currentUser?.id ?? 'guest'}`, val);
   };
 
-  // Filter tasks belonging to current user
+  // Filter tasks belonging to current user (by user ID)
   const myItems = tasks.filter((t) => {
     if (!currentUser) return false;
-    const isCreator = t.createdByUsername?.toLowerCase() === currentUser.username.toLowerCase();
-    const isAssignee = t.assigneeId === currentUser.id || t.createdById === currentUser.id;
-    return isCreator || isAssignee;
+    return t.assigneeId === currentUser.id || t.createdById === currentUser.id;
   });
 
   // 1. Daily Tasks (active)
@@ -178,7 +172,7 @@ export default function MyDeskPage() {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <img
-              src={currentUser.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80'}
+              src={currentUser.avatarUrl || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80'}
               alt={currentUser.name}
               style={{
                 width: '56px',
@@ -200,7 +194,7 @@ export default function MyDeskPage() {
                   textTransform: 'uppercase',
                 }}
               >
-                @{currentUser.username} • {currentUser.role === 'admin' ? 'BUREAU ADMINISTRATOR' : 'TEAM MEMBER'}
+                @{currentUser.email ? currentUser.email.split('@')[0] : currentUser.name} • {currentUser.role === 'admin' ? 'BUREAU ADMINISTRATOR' : 'TEAM MEMBER'}
               </div>
               <h2
                 className="serif-display"

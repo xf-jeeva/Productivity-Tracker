@@ -1,34 +1,24 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { getCurrentUser, BUREAU_SYNC_EVENT } from '../lib/storage';
+import { useAuth } from './AuthProvider';
 import { playTypewriterClick } from '../lib/sound';
-import { User } from '../types';
-import { CheckSquare, ShieldCheck, Lock, Users, BookOpen } from 'lucide-react';
+import { CheckSquare, ShieldCheck, Users, BookOpen } from 'lucide-react';
 
 export default function Navigation() {
   const pathname = usePathname();
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const { user } = useAuth();
 
-  useEffect(() => {
-    const sync = () => {
-      setCurrentUser(getCurrentUser());
-    };
-    sync();
-    window.addEventListener(BUREAU_SYNC_EVENT, sync);
-    return () => window.removeEventListener(BUREAU_SYNC_EVENT, sync);
-  }, []);
-
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = user?.role === 'admin';
 
   const navItems = [
     {
       href: '/',
       label: 'My Work Desk',
       icon: CheckSquare,
-      badge: currentUser ? `@${currentUser.username}` : 'Workstation',
+      badge: user ? `@${user.email ? user.email.split('@')[0] : user.name}` : 'Workstation',
     },
     {
       href: '/team',
@@ -42,13 +32,17 @@ export default function Navigation() {
       icon: BookOpen,
       badge: 'Logs',
     },
-    {
-      href: '/admin',
-      label: 'Admin Oversight',
-      icon: ShieldCheck,
-      badge: isAdmin ? 'Admin Access' : 'Admin Only',
-      adminOnly: true,
-    },
+    ...(isAdmin
+      ? [
+          {
+            href: '/admin',
+            label: 'Admin Oversight',
+            icon: ShieldCheck,
+            badge: 'Admin Access',
+            adminOnly: true,
+          },
+        ]
+      : []),
   ];
 
   return (

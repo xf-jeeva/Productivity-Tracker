@@ -258,9 +258,9 @@ export default function Header({ onOpenNewTaskModal }: HeaderProps) {
 
               {/* User Badge */}
               <Link
-                href={user.role === 'admin' ? '/admin' : '/'}
+                href="/"
                 className="vintage-paper"
-                title={user.role === 'admin' ? 'Go to Admin Oversight' : 'Go to My Work Desk'}
+                title="Go to My Work Desk"
                 style={{
                   display: 'flex', alignItems: 'center', gap: '0.65rem',
                   padding: '0.35rem 0.75rem', backgroundColor: 'var(--bg-card)',
