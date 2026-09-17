@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { 
   getTasks, 
+  getCurrentUser,
   BUREAU_SYNC_EVENT 
 } from '@/lib/storage';
 import { Task, ItemType } from '@/types';
@@ -38,9 +39,34 @@ import {
 
 export default function MyDeskPage() {
   const router = useRouter();
-  const { user: currentUser, loading: authLoading } = useAuth();
+  const { user: authUser, loading: authLoading } = useAuth();
+  const [localUser, setLocalUser] = useState(() => getCurrentUser());
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const handleSync = () => setLocalUser(getCurrentUser());
+    window.addEventListener(BUREAU_SYNC_EVENT, handleSync);
+    return () => window.removeEventListener(BUREAU_SYNC_EVENT, handleSync);
+  }, []);
+
+  const currentUser = authUser
+    ? {
+        id: authUser.id,
+        name: authUser.name,
+        email: authUser.email,
+        avatarUrl: authUser.avatarUrl || undefined,
+        role: authUser.role,
+      }
+    : localUser
+    ? {
+        id: localUser.id,
+        name: localUser.name,
+        email: localUser.email || `${localUser.username}@dailybureau.org`,
+        avatarUrl: localUser.avatar,
+        role: localUser.role,
+      }
+    : null;
   
   const [activeView, setActiveView] = useState<'active' | 'completed' | 'deleted'>('active');
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,11 +78,11 @@ export default function MyDeskPage() {
   const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && !currentUser) {
+    if (authLoading) return;
+    if (!currentUser) {
       router.replace('/login');
       return;
     }
-    if (!currentUser) return;
 
     const sync = () => {
       setTasks(getTasks());
