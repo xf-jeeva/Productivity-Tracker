@@ -21,22 +21,23 @@ export default function AuthCallbackPage() {
       }
 
       try {
-        // Check if there is an auth code to exchange
-        const hasCode = window.location.search.includes('code=');
-        if (hasCode) {
-          const { error } = await supabase.auth.exchangeCodeForSession(
-            window.location.href
-          );
+        // 1. Extract authorization code from URL search params
+        const url = new URL(window.location.href);
+        const code = url.searchParams.get('code');
+
+        if (code) {
+          setStatus('Exchanging security clearance code...');
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
             console.warn('exchangeCodeForSession notice:', error.message);
           }
         }
 
-        // Verify active session exists, polling up to 3 seconds if needed
+        // 2. Poll for session to stabilize
         let { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          for (let i = 0; i < 6; i++) {
-            await new Promise((resolve) => setTimeout(resolve, 500));
+          for (let i = 0; i < 8; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 400));
             const check = await supabase.auth.getSession();
             if (check.data.session) {
               session = check.data.session;
@@ -45,7 +46,7 @@ export default function AuthCallbackPage() {
           }
         }
 
-        setStatus('Fetching your clearance profile...');
+        setStatus('Verifying personnel credentials...');
         const user = await getAuthUser();
 
         if (!user) {
@@ -54,9 +55,11 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        setStatus(`Welcome back, ${user.name}!`);
-        // Default entry point is ALWAYS the main workstation desk (/)
-        setTimeout(() => router.replace('/'), 300);
+        setStatus(`Clearance Approved. Welcome, ${user.name}!`);
+        // Clean entry point to My Work Desk
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 300);
       } catch (err) {
         console.error('Callback processing error:', err);
         router.replace('/login');

@@ -60,7 +60,25 @@ function syncAuthUserToStorage(u: AuthUser | null) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const stored = localStorage.getItem('daily_bureau_current_user_v3');
+      if (stored) {
+        const u = JSON.parse(stored);
+        if (u?.id && u?.email) {
+          return {
+            id: u.id,
+            email: u.email,
+            name: u.name || u.email.split('@')[0],
+            avatarUrl: u.avatar || null,
+            role: u.role || 'member',
+          };
+        }
+      }
+    } catch {}
+    return null;
+  });
   const [loading, setLoading] = useState(true);
 
   const applyUser = (u: AuthUser | null) => {
