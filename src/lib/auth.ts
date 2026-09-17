@@ -77,9 +77,10 @@ async function checkFirstUser(): Promise<boolean> {
 // ── Sign in with Google ────────────────────────────────────────────────────
 export async function signInWithGoogle(): Promise<void> {
   if (!supabase) throw new Error('Supabase not configured');
-  const redirectTo = typeof window !== 'undefined'
-    ? `${window.location.origin}/auth/callback`
-    : '/auth/callback';
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const redirectTo = origin
+    ? `${origin}/auth/callback/`
+    : '/auth/callback/';
 
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
