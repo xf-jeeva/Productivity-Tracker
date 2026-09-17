@@ -24,6 +24,7 @@ import {
   MIN_REDEEM_TOKENS
 } from '@/lib/storage';
 import { getAllProfiles } from '@/lib/auth';
+import { fetchAllCloudTasks } from '@/lib/cloudTasks';
 
 import { User, Task, Role, RewardClaim } from '@/types';
 import TaskCard from '@/components/TaskCard';
@@ -117,10 +118,59 @@ export default function AdminDashboardPage() {
     }
     if (!user) return;
 
-    const sync = () => {
-      setUsers(getUsers());
+    const sync = async () => {
+      const localUsers = getUsers();
+      setUsers(localUsers);
       setTasks(getTasks());
       setRewardClaims(getRewardClaims());
+
+      try {
+        const [cloudProfiles, cloudTasks] = await Promise.all([
+          getAllProfiles(),
+          fetchAllCloudTasks(),
+        ]);
+
+        if (cloudProfiles && cloudProfiles.length > 0) {
+          const profileIds = new Set(cloudProfiles.map((p) => p.id));
+          const profileEmails = new Set(cloudProfiles.map((p) => p.email.toLowerCase()));
+
+          const formattedUsers: User[] = cloudProfiles.map((p) => {
+            const username = p.email ? p.email.split('@')[0] : p.id;
+            const existing = localUsers.find(
+              (u) => u.id === p.id || u.username.toLowerCase() === username.toLowerCase()
+            );
+            return {
+              id: p.id,
+              username: existing?.username || username,
+              password: existing?.password || '',
+              name: p.name || username,
+              email: p.email,
+              role: p.role,
+              avatar: p.avatarUrl || existing?.avatar,
+              title: existing?.title || (p.role === 'admin' ? 'Chief Bureau Administrator' : 'Field Operative'),
+              department: existing?.department || 'Dispatch & Logistics',
+              deskNumber: existing?.deskNumber || `DK-${p.id.slice(0, 4).toUpperCase()}`,
+              createdAt: existing?.createdAt || new Date().toISOString(),
+            };
+          });
+
+          const mergedUsers = [
+            ...formattedUsers,
+            ...localUsers.filter(
+              (u) => !profileIds.has(u.id) && (!u.email || !profileEmails.has(u.email.toLowerCase()))
+            ),
+          ];
+          setUsers(mergedUsers);
+        }
+
+        if (cloudTasks && cloudTasks.length > 0) {
+          const cloudIds = new Set(cloudTasks.map((t) => t.id));
+          const localOnly = getTasks().filter((t) => !cloudIds.has(t.id));
+          setTasks([...cloudTasks, ...localOnly]);
+        }
+      } catch (err) {
+        console.warn('Admin cloud sync note:', err);
+      }
     };
     sync();
     window.addEventListener(BUREAU_SYNC_EVENT, sync);
