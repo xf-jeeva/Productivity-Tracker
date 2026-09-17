@@ -3,16 +3,15 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAuth } from './AuthProvider';
+import { signOut } from '../lib/auth';
 import { 
-  getCurrentUser, 
-  logout, 
   isSoundEnabled, 
   setSoundEnabled, 
   BUREAU_SYNC_EVENT,
   resetBureauData
 } from '../lib/storage';
 import { playTypewriterClick, playVintageBell } from '../lib/sound';
-import { User } from '../types';
 import VintageClock from './VintageClock';
 import TokenPurseWidget from './TokenPurseWidget';
 import ClaimRewardModal from './ClaimRewardModal';
@@ -26,7 +25,6 @@ import {
   LogIn, 
   ShieldAlert, 
   RotateCcw,
-  User as UserIcon
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -35,30 +33,20 @@ interface HeaderProps {
 
 export default function Header({ onOpenNewTaskModal }: HeaderProps) {
   const router = useRouter();
-  const [currentUser, setCurrentUserState] = useState<User | null>(null);
+  const { user } = useAuth();
   const [soundOn, setSoundOn] = useState<boolean>(true);
   const [theme, setTheme] = useState<'parchment' | 'nocturne'>('parchment');
   const [isClaimRewardOpen, setIsClaimRewardOpen] = useState<boolean>(false);
 
-
   useEffect(() => {
-    const sync = () => {
-      setCurrentUserState(getCurrentUser());
-      setSoundOn(isSoundEnabled());
-    };
-
-    sync();
-    window.addEventListener(BUREAU_SYNC_EVENT, sync);
-
+    setSoundOn(isSoundEnabled());
     const currentTheme = document.documentElement.getAttribute('data-theme') === 'nocturne' ? 'nocturne' : 'parchment';
     setTheme(currentTheme);
-
-    return () => window.removeEventListener(BUREAU_SYNC_EVENT, sync);
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     playTypewriterClick();
-    logout();
+    await signOut();
     router.push('/login');
   };
 
@@ -249,7 +237,7 @@ export default function Header({ onOpenNewTaskModal }: HeaderProps) {
 
         {/* User Status & Action Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-          {currentUser && onOpenNewTaskModal && (
+          {user && onOpenNewTaskModal && (
             <button
               onClick={() => {
                 playTypewriterClick();
@@ -263,82 +251,51 @@ export default function Header({ onOpenNewTaskModal }: HeaderProps) {
             </button>
           )}
 
-          {currentUser ? (
+          {user ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
               {/* Token Purse Widget */}
               <TokenPurseWidget onOpenClaimModal={() => setIsClaimRewardOpen(true)} />
 
-              {/* User Badge (Clickable Navigation) */}
+              {/* User Badge */}
               <Link
-                href={currentUser.role === 'admin' ? '/admin' : '/'}
+                href={user.role === 'admin' ? '/admin' : '/'}
                 className="vintage-paper"
-                title={currentUser.role === 'admin' ? 'Go to Admin Oversight' : 'Go to My Work Desk'}
+                title={user.role === 'admin' ? 'Go to Admin Oversight' : 'Go to My Work Desk'}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.65rem',
-                  padding: '0.35rem 0.75rem',
-                  backgroundColor: 'var(--bg-card)',
+                  display: 'flex', alignItems: 'center', gap: '0.65rem',
+                  padding: '0.35rem 0.75rem', backgroundColor: 'var(--bg-card)',
                   borderRadius: '4px',
-                  border: currentUser.role === 'admin' ? '1.5px solid var(--stamp-red)' : '1px solid var(--border-sepia)',
-                  textDecoration: 'none',
-                  cursor: 'pointer',
+                  border: user.role === 'admin' ? '1.5px solid var(--stamp-red)' : '1px solid var(--border-sepia)',
+                  textDecoration: 'none', cursor: 'pointer',
                 }}
               >
-                <img
-                  src={currentUser.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80'}
-                  alt={currentUser.name}
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    objectFit: 'cover',
-                    border: '1.5px solid var(--brass-gold)',
-                  }}
-                />
-                <div style={{ textAlign: 'left' }}>
-                  <div
-                    style={{
-                      fontSize: '0.82rem',
-                      fontWeight: 700,
-                      color: 'var(--ink-primary)',
-                      lineHeight: 1.2,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.35rem',
-                    }}
-                  >
-                    <span>{currentUser.name}</span>
-                    <span
-                      className="typewriter-text"
-                      style={{
-                        fontSize: '0.65rem',
-                        color: 'var(--ink-muted)',
-                      }}
-                    >
-                      (@{currentUser.username})
-                    </span>
+                {user.avatarUrl ? (
+                  <img
+                    src={user.avatarUrl}
+                    alt={user.name}
+                    style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', border: '1.5px solid var(--brass-gold)' }}
+                  />
+                ) : (
+                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--brass-gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: '0.85rem' }}>
+                    {user.name.charAt(0).toUpperCase()}
                   </div>
-                  <div
-                    className="typewriter-text"
-                    style={{
-                      fontSize: '0.65rem',
-                      color: currentUser.role === 'admin' ? 'var(--stamp-red)' : 'var(--stamp-blue)',
-                      fontWeight: 700,
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {currentUser.role === 'admin' ? '★ Bureau Admin' : 'Team Member'}
+                )}
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--ink-primary)', lineHeight: 1.2 }}>
+                    {user.name}
+                  </div>
+                  <div className="typewriter-text" style={{ fontSize: '0.65rem', color: user.role === 'admin' ? 'var(--stamp-red)' : 'var(--stamp-blue)', fontWeight: 700, textTransform: 'uppercase' }}>
+                    {user.role === 'admin' ? '★ Bureau Admin' : 'Team Member'}
                   </div>
                 </div>
               </Link>
 
-              {/* Logout Button */}
+              {/* Logout */}
               <button
                 onClick={handleLogout}
                 className="btn-parchment"
                 style={{ padding: '0.45rem 0.75rem', fontSize: '0.75rem' }}
-                title="Log out of workstation"
+                title="Log out"
               >
                 <LogOut size={14} style={{ color: 'var(--stamp-red)' }} />
                 <span>Logout</span>

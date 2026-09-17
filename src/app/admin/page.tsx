@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/AuthProvider';
 import { 
-  getCurrentUser, 
   getUsers, 
   getTasks, 
   createUser, 
@@ -22,6 +23,7 @@ import {
   MIN_REDEEM_AMOUNT_RUPEES,
   MIN_REDEEM_TOKENS
 } from '@/lib/storage';
+import { getAllProfiles } from '@/lib/auth';
 
 import { User, Task, Role, RewardClaim } from '@/types';
 import TaskCard from '@/components/TaskCard';
@@ -61,7 +63,8 @@ import {
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [rewardClaims, setRewardClaims] = useState<RewardClaim[]>([]);
@@ -107,31 +110,55 @@ export default function AdminDashboardPage() {
   };
 
   useEffect(() => {
+    // Security: redirect non-admins immediately
+    if (!authLoading && (!user || user.role !== 'admin')) {
+      router.replace('/');
+      return;
+    }
+    if (!user) return;
+
     const sync = () => {
-      setCurrentUser(getCurrentUser());
       setUsers(getUsers());
       setTasks(getTasks());
       setRewardClaims(getRewardClaims());
     };
-
     sync();
     window.addEventListener(BUREAU_SYNC_EVENT, sync);
     return () => window.removeEventListener(BUREAU_SYNC_EVENT, sync);
-  }, []);
+  }, [user, authLoading, router]);
 
-  const isAdmin = currentUser?.role === 'admin';
+  const isAdmin = user?.role === 'admin';
+
+  // Loading state
+  if (authLoading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <div className="typewriter-text" style={{ fontSize: '0.85rem', color: 'var(--ink-secondary)', letterSpacing: '0.1em' }}>VERIFYING CLEARANCE...</div>
+      </div>
+    );
+  }
+
+  // Security gate: non-admin sees a locked screen briefly before redirect
+  if (!user || user.role !== 'admin') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: '1rem' }}>
+        <ShieldAlert size={48} style={{ color: 'var(--stamp-red)' }} />
+        <div className="typewriter-text" style={{ fontSize: '0.85rem', color: 'var(--stamp-red)', letterSpacing: '0.1em' }}>ACCESS DENIED — RESTRICTED AREA</div>
+      </div>
+    );
+  }
 
   // Handle Approve Reward Claim
   const handleApproveClaim = (claimId: string) => {
     playRubberStampSound();
     setTimeout(() => playCoinRewardFanfare(), 120);
-    updateRewardClaimStatus(claimId, 'approved', 'Disbursed by Bureau Chief via Treasury.', currentUser?.username || 'admin');
+    updateRewardClaimStatus(claimId, 'approved', 'Disbursed by Bureau Chief via Treasury.', user?.email || 'admin');
   };
 
   // Handle Reject Reward Claim
   const handleRejectClaim = (claimId: string) => {
     playTypewriterClick();
-    updateRewardClaimStatus(claimId, 'rejected', 'Claim rejected; tokens refunded to member.', currentUser?.username || 'admin');
+    updateRewardClaimStatus(claimId, 'rejected', 'Claim rejected; tokens refunded to member.', user?.email || 'admin');
   };
 
   // Handle Create User
@@ -174,10 +201,10 @@ export default function AdminDashboardPage() {
   // Handle Change Admin Password
   const handleChangeAdminPassword = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser || !newAdminPass.trim()) return;
+    if (!user || !newAdminPass.trim()) return;
 
     playTypewriterClick();
-    updateUserPassword(currentUser.id, newAdminPass.trim());
+    updateUserPassword(user.id, newAdminPass.trim());
     setChangePassSuccess('Admin password updated successfully!');
     setNewAdminPass('');
     setTimeout(() => {
