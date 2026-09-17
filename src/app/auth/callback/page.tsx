@@ -32,24 +32,31 @@ export default function AuthCallbackPage() {
           }
         }
 
-        // Verify active session exists
-        const { data: { session } } = await supabase.auth.getSession();
+        // Verify active session exists, polling up to 3 seconds if needed
+        let { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          // Allow detectSessionInUrl a moment to complete if needed
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          for (let i = 0; i < 6; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            const check = await supabase.auth.getSession();
+            if (check.data.session) {
+              session = check.data.session;
+              break;
+            }
+          }
         }
 
         setStatus('Fetching your clearance profile...');
         const user = await getAuthUser();
 
         if (!user) {
+          console.warn('Session could not be established after callback, redirecting to login');
           router.replace('/login');
           return;
         }
 
-        setStatus(`Welcome, ${user.name}!`);
+        setStatus(`Welcome back, ${user.name}!`);
         // Default entry point is ALWAYS the main workstation desk (/)
-        setTimeout(() => router.replace('/'), 500);
+        setTimeout(() => router.replace('/'), 300);
       } catch (err) {
         console.error('Callback processing error:', err);
         router.replace('/login');

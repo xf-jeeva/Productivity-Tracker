@@ -22,47 +22,89 @@ export async function getSession(): Promise<Session | null> {
 // ── Get current auth user + their profile (role, name, etc.) ──────────────
 export async function getAuthUser(): Promise<AuthUser | null> {
   if (!supabase) return null;
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  return fetchProfile(user);
-}
-
-// ── Fetch profile from `profiles` table ───────────────────────────────────
-export async function fetchProfile(user: User): Promise<AuthUser | null> {
-  if (!supabase) return null;
-  const { data } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single();
-
-  if (!data) {
-    // Profile might not exist yet — create it
-    const isFirstUser = await checkFirstUser();
-    const profile: Partial<SupabaseProfile> = {
-      id: user.id as unknown as string,
-      email: user.email!,
-      name: user.user_metadata?.full_name ?? user.email?.split('@')[0] ?? 'User',
-      avatar_url: user.user_metadata?.avatar_url ?? null,
-      role: isFirstUser ? 'admin' : 'member',
-    };
-    await supabase.from('profiles').upsert(profile);
-    return {
-      id: user.id,
-      email: user.email!,
-      name: profile.name!,
-      avatarUrl: profile.avatar_url ?? null,
-      role: profile.role!,
-    };
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (user && !error) {
+      return await fetchProfile(user);
+    }
+  } catch (e) {
+    console.warn('getUser check notice, falling back to session:', e);
   }
 
-  return {
-    id: data.id,
-    email: data.email,
-    name: data.name ?? data.email.split('@')[0],
-    avatarUrl: data.avatar_url,
-    role: data.role,
+  // Fallback to local session if getUser network call fails or is delayed
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      return await fetchProfile(session.user);
+    }
+  } catch (e) {
+    console.warn('getSession fallback error:', e);
+  }
+
+  return null;
+}
+
+// ── Fetch profile from `profiles` table (bulletproof fallback) ─────────────
+export async function fetchProfile(user: User): Promise<AuthUser> {
+  const email = user.email || '';
+  const name =
+    user.user_metadata?.full_name ||
+    user.user_metadata?.name ||
+    (email ? email.split('@')[0] : 'Bureau Member');
+  const avatarUrl =
+    user.user_metadata?.avatar_url ||
+    user.user_metadata?.picture ||
+    null;
+
+  const fallbackUser: AuthUser = {
+    id: user.id,
+    email,
+    name,
+    avatarUrl,
+    role: 'member',
   };
+
+  if (!supabase) return fallbackUser;
+
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (data) {
+      return {
+        id: data.id,
+        email: data.email || fallbackUser.email,
+        name: data.name || fallbackUser.name,
+        avatarUrl: data.avatar_url ?? fallbackUser.avatarUrl,
+        role: (data.role as 'admin' | 'member') || 'member',
+      };
+    }
+
+    // If profile row doesn't exist yet, attempt to upsert
+    const isFirstUser = await checkFirstUser().catch(() => false);
+    const assignedRole: 'admin' | 'member' = isFirstUser ? 'admin' : 'member';
+    fallbackUser.role = assignedRole;
+
+    try {
+      await supabase.from('profiles').upsert({
+        id: user.id,
+        email: fallbackUser.email,
+        name: fallbackUser.name,
+        avatar_url: fallbackUser.avatarUrl,
+        role: assignedRole,
+      });
+    } catch (upsertErr) {
+      console.warn('Profile upsert note:', upsertErr);
+    }
+
+    return fallbackUser;
+  } catch (err) {
+    console.warn('Error reading profiles table, using auth fallback:', err);
+    return fallbackUser;
+  }
 }
 
 // ── Check if any admin exists yet ─────────────────────────────────────────
