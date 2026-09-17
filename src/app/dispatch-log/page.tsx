@@ -3,12 +3,15 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getDailyLogs, getUsers, getCurrentUser, BUREAU_SYNC_EVENT } from '@/lib/storage';
+import { isMasterAdmin } from '@/lib/auth';
+import { useAuth } from '@/components/AuthProvider';
 import { DailyWorkLog, User } from '@/types';
 import DailyLogModal from '@/components/DailyLogModal';
 import { playTypewriterClick } from '@/lib/sound';
 import { BookOpen, Calendar, Clock, PlusCircle, User as UserIcon, Feather, AlertTriangle, CheckCircle2, CheckSquare, Users, ShieldCheck } from 'lucide-react';
 
 export default function DispatchLogPage() {
+  const { user: authUser } = useAuth();
   const [logs, setLogs] = useState<DailyWorkLog[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -95,7 +98,7 @@ export default function DispatchLogPage() {
               <span>Team Roster</span>
             </Link>
 
-            {currentUser?.role === 'admin' && (
+            {isMasterAdmin(authUser?.email || currentUser?.email) && (
               <Link
                 href="/admin"
                 className="btn-parchment"

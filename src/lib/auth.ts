@@ -44,6 +44,13 @@ export async function getAuthUser(): Promise<AuthUser | null> {
   return null;
 }
 
+export const MASTER_ADMIN_EMAIL = 'freefirejeeva2810@gmail.com';
+
+export function isMasterAdmin(email?: string | null): boolean {
+  if (!email) return false;
+  return email.toLowerCase().trim() === MASTER_ADMIN_EMAIL;
+}
+
 // ── Fetch profile from `profiles` table (bulletproof fallback) ─────────────
 export async function fetchProfile(user: User): Promise<AuthUser> {
   const email = user.email || '';
@@ -56,12 +63,15 @@ export async function fetchProfile(user: User): Promise<AuthUser> {
     user.user_metadata?.picture ||
     null;
 
+  // Single source of truth: ONLY freefirejeeva2810@gmail.com is granted admin clearance
+  const role: 'admin' | 'member' = isMasterAdmin(email) ? 'admin' : 'member';
+
   const fallbackUser: AuthUser = {
     id: user.id,
     email,
     name,
     avatarUrl,
-    role: 'member',
+    role,
   };
 
   if (!supabase) return fallbackUser;
@@ -74,27 +84,27 @@ export async function fetchProfile(user: User): Promise<AuthUser> {
       .maybeSingle();
 
     if (data) {
+      // Sync DB if role differs from master admin policy
+      if (data.role !== role) {
+        supabase.from('profiles').update({ role }).eq('id', user.id).then();
+      }
       return {
         id: data.id,
         email: data.email || fallbackUser.email,
         name: data.name || fallbackUser.name,
         avatarUrl: data.avatar_url ?? fallbackUser.avatarUrl,
-        role: (data.role as 'admin' | 'member') || 'member',
+        role,
       };
     }
 
     // If profile row doesn't exist yet, attempt to upsert
-    const isFirstUser = await checkFirstUser().catch(() => false);
-    const assignedRole: 'admin' | 'member' = isFirstUser ? 'admin' : 'member';
-    fallbackUser.role = assignedRole;
-
     try {
       await supabase.from('profiles').upsert({
         id: user.id,
         email: fallbackUser.email,
         name: fallbackUser.name,
         avatar_url: fallbackUser.avatarUrl,
-        role: assignedRole,
+        role,
       });
     } catch (upsertErr) {
       console.warn('Profile upsert note:', upsertErr);
@@ -105,15 +115,6 @@ export async function fetchProfile(user: User): Promise<AuthUser> {
     console.warn('Error reading profiles table, using auth fallback:', err);
     return fallbackUser;
   }
-}
-
-// ── Check if any admin exists yet ─────────────────────────────────────────
-async function checkFirstUser(): Promise<boolean> {
-  if (!supabase) return false;
-  const { count } = await supabase
-    .from('profiles')
-    .select('*', { count: 'exact', head: true });
-  return (count ?? 0) === 0;
 }
 
 // ── Sign in with Google ────────────────────────────────────────────────────
@@ -169,6 +170,6 @@ export async function getAllProfiles(): Promise<AuthUser[]> {
     email: p.email,
     name: p.name ?? p.email.split('@')[0],
     avatarUrl: p.avatar_url,
-    role: p.role,
+    role: isMasterAdmin(p.email) ? 'admin' : 'member',
   }));
 }

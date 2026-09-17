@@ -3,11 +3,14 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getUsers, getTasks, addUser, deleteUser, setCurrentUser, getCurrentUser, BUREAU_SYNC_EVENT } from '@/lib/storage';
+import { getAllProfiles, isMasterAdmin } from '@/lib/auth';
+import { useAuth } from '@/components/AuthProvider';
 import { User, Department, Task } from '@/types';
 import { playRubberStampSound, playTypewriterClick } from '@/lib/sound';
 import { Users, UserPlus, Award, CheckCircle2, Clock, X, Stamp, Trash2, ShieldCheck, CheckSquare, BookOpen } from 'lucide-react';
 
 export default function TeamRosterPage() {
+  const { user: authUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [currentUser, setCurrentUserLocal] = useState<User | null>(null);
@@ -25,10 +28,45 @@ export default function TeamRosterPage() {
   const [role, setRole] = useState<'member' | 'admin'>('member');
 
   useEffect(() => {
-    const sync = () => {
-      setUsers(getUsers());
+    const sync = async () => {
+      const raw = getUsers().filter((u) => u.id !== 'usr-admin' && u.username?.toLowerCase() !== 'admin' && u.email?.toLowerCase() !== 'admin@dailybureau.org');
+      setUsers(raw);
       setTasks(getTasks());
       setCurrentUserLocal(getCurrentUser());
+
+      try {
+        const cloudProfiles = await getAllProfiles();
+        if (cloudProfiles && cloudProfiles.length > 0) {
+          const profileIds = new Set(cloudProfiles.map((p) => p.id));
+          const formatted: User[] = cloudProfiles
+            .filter((p) => p.id !== 'usr-admin' && p.email?.toLowerCase() !== 'admin@dailybureau.org')
+            .map((p) => {
+              const username = p.email ? p.email.split('@')[0] : p.id;
+              const existing = raw.find((u) => u.id === p.id || u.username.toLowerCase() === username.toLowerCase());
+              const isAdm = isMasterAdmin(p.email);
+              return {
+                id: p.id,
+                username: existing?.username || username,
+                password: '',
+                name: p.name || username,
+                email: p.email,
+                role: isAdm ? 'admin' : 'member',
+                avatar: p.avatarUrl || existing?.avatar,
+                title: existing?.title || (isAdm ? 'Chief Bureau Administrator' : 'Field Operative'),
+                department: existing?.department || 'Dispatch & Logistics',
+                deskNumber: existing?.deskNumber || `DK-${p.id.slice(0, 4).toUpperCase()}`,
+                createdAt: existing?.createdAt || new Date().toISOString(),
+              };
+            });
+          const merged = [
+            ...formatted,
+            ...raw.filter((u) => !profileIds.has(u.id)),
+          ];
+          setUsers(merged);
+        }
+      } catch (e) {
+        console.warn('Team roster cloud sync note:', e);
+      }
     };
 
     sync();
@@ -151,7 +189,7 @@ export default function TeamRosterPage() {
               <span>Dispatch Logs</span>
             </Link>
 
-            {currentUser?.role === 'admin' && (
+            {isMasterAdmin(authUser?.email || currentUser?.email) && (
               <Link
                 href="/admin"
                 className="btn-parchment"
@@ -212,52 +250,53 @@ export default function TeamRosterPage() {
           const completedTasks = userTasks.filter((t) => t.status === 'completed');
           const isCurrent = currentUser?.id === user.id;
 
-          return (
-            <div
-              key={user.id}
-              className="vintage-paper"
-              style={{
-                padding: '1.5rem',
-                borderTop: user.role === 'admin' ? '3px solid var(--stamp-red)' : '3px solid var(--brass-gold)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '1rem',
-                backgroundColor: isCurrent ? 'var(--bg-card-alt)' : 'var(--bg-card)',
-              }}
-            >
-              {/* Personnel Header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <img
-                  src={user.avatar}
-                  alt={user.name}
-                  style={{
-                    width: '56px',
-                    height: '56px',
-                    borderRadius: '50%',
-                    border: '2px solid var(--brass-gold)',
-                    objectFit: 'cover',
-                  }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <h3 className="serif-display" style={{ fontSize: '1.15rem', fontWeight: 700 }}>
-                      {user.name}
-                    </h3>
-                    {user.role === 'admin' && (
-                      <span
-                        style={{
-                          fontSize: '0.62rem',
-                          padding: '0.1rem 0.4rem',
-                          backgroundColor: 'var(--stamp-red-bg)',
-                          color: 'var(--stamp-red)',
-                          borderRadius: '2px',
-                          fontWeight: 700,
-                          fontFamily: 'var(--font-mono)',
-                        }}
-                      >
-                        CHIEF ADMIN
-                      </span>
-                    )}
+            const isOfficerAdmin = isMasterAdmin(user.email);
+            return (
+              <div
+                key={user.id}
+                className="vintage-paper"
+                style={{
+                  padding: '1.5rem',
+                  borderTop: isOfficerAdmin ? '3px solid var(--stamp-red)' : '3px solid var(--brass-gold)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1rem',
+                  backgroundColor: isCurrent ? 'var(--bg-card-alt)' : 'var(--bg-card)',
+                }}
+              >
+                {/* Personnel Header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <img
+                    src={user.avatar}
+                    alt={user.name}
+                    style={{
+                      width: '56px',
+                      height: '56px',
+                      borderRadius: '50%',
+                      border: '2px solid var(--brass-gold)',
+                      objectFit: 'cover',
+                    }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <h3 className="serif-display" style={{ fontSize: '1.15rem', fontWeight: 700 }}>
+                        {user.name}
+                      </h3>
+                      {isOfficerAdmin && (
+                        <span
+                          style={{
+                            fontSize: '0.62rem',
+                            padding: '0.1rem 0.4rem',
+                            backgroundColor: 'var(--stamp-red-bg)',
+                            color: 'var(--stamp-red)',
+                            borderRadius: '2px',
+                            fontWeight: 700,
+                            fontFamily: 'var(--font-mono)',
+                          }}
+                        >
+                          CHIEF ADMIN
+                        </span>
+                      )}
                   </div>
                   <div className="typewriter-text" style={{ fontSize: '0.72rem', color: 'var(--brass-dark)', fontWeight: 600 }}>
                     {user.title}
@@ -351,7 +390,7 @@ export default function TeamRosterPage() {
                 >
                   {isCurrent ? '✓ Active Workstation' : `Switch Persona (${user.name.split(' ')[0]})`}
                 </button>
-                {currentUser?.role === 'admin' && user.username.toLowerCase() !== 'admin' && (
+                {isMasterAdmin(authUser?.email || currentUser?.email) && !isMasterAdmin(user.email) && (
                   <button
                     type="button"
                     onClick={() => {

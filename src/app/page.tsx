@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
+import { isMasterAdmin } from '@/lib/auth';
 import { 
   getTasks, 
   getCurrentUser,
@@ -220,7 +221,7 @@ export default function MyDeskPage() {
                   textTransform: 'uppercase',
                 }}
               >
-                @{currentUser.email ? currentUser.email.split('@')[0] : currentUser.name} • {currentUser.role === 'admin' ? 'BUREAU ADMINISTRATOR' : 'TEAM MEMBER'}
+                @{currentUser.email ? currentUser.email.split('@')[0] : currentUser.name} • {isMasterAdmin(currentUser.email) ? 'BUREAU ADMINISTRATOR' : 'TEAM MEMBER'}
               </div>
               <h2
                 className="serif-display"
@@ -279,7 +280,7 @@ export default function MyDeskPage() {
               <span>Add Daily Routine</span>
             </button>
 
-            {currentUser.role === 'admin' && (
+            {isMasterAdmin(currentUser.email) && (
               <Link
                 href="/admin"
                 className="btn-parchment"

@@ -153,7 +153,7 @@ export default function LoginPage() {
           Only you can see your personal data.
         </p>
         <p style={{ fontSize: '0.74rem', color: 'var(--ink-muted)', marginTop: '0.5rem' }}>
-          First person to sign in becomes the <strong>Bureau Administrator</strong>.
+          Executive oversight is strictly authorized for the Chief Administrator.
         </p>
       </div>
       <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>

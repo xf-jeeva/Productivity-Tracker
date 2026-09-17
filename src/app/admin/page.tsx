@@ -18,7 +18,7 @@ import {
   MIN_REDEEM_AMOUNT_RUPEES,
   MIN_REDEEM_TOKENS
 } from '@/lib/storage';
-import { getAllProfiles } from '@/lib/auth';
+import { getAllProfiles, isMasterAdmin } from '@/lib/auth';
 import { fetchAllCloudTasks } from '@/lib/cloudTasks';
 import { fetchCloudNotes } from '@/lib/cloudNotes';
 
@@ -63,13 +63,6 @@ export default function AdminDashboardPage() {
   const router = useRouter();
   const { user: authUser, loading: authLoading } = useAuth();
 
-  // ── Executive Clearance Gate State ───────────────────────────────────────
-  const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(false);
-  const [adminUsernameInput, setAdminUsernameInput] = useState<string>('');
-  const [adminPasswordInput, setAdminPasswordInput] = useState<string>('');
-  const [gateError, setGateError] = useState<string>('');
-  const [gateSubmitting, setGateSubmitting] = useState<boolean>(false);
-
   // ── Dashboard Data State ──────────────────────────────────────────────────
   const [users, setUsers] = useState<User[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -90,17 +83,13 @@ export default function AdminDashboardPage() {
   const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState<boolean>(false);
 
-  // ── Check session storage on mount for executive clearance ────────────────
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const unlocked = sessionStorage.getItem('bureau_admin_unlocked') === 'true';
-      setIsAdminUnlocked(unlocked);
-    }
-  }, []);
-
   // ── Master data synchronization ───────────────────────────────────────────
   const syncData = async () => {
-    const localUsers = getUsers();
+    const rawLocalUsers = getUsers();
+    // Exclude mock usr-admin
+    const localUsers = rawLocalUsers.filter(
+      (u) => u.id !== 'usr-admin' && u.username?.toLowerCase() !== 'admin' && u.email?.toLowerCase() !== 'admin@dailybureau.org'
+    );
     setUsers(localUsers);
     setTasks(getTasks());
     setRewardClaims(getRewardClaims());
@@ -112,23 +101,28 @@ export default function AdminDashboardPage() {
       ]);
 
       if (cloudProfiles && cloudProfiles.length > 0) {
-        const profileIds = new Set(cloudProfiles.map((p) => p.id));
-        const profileEmails = new Set(cloudProfiles.map((p) => p.email.toLowerCase()));
+        // Exclude mock admin from cloudProfiles as well
+        const validProfiles = cloudProfiles.filter(
+          (p) => p.id !== 'usr-admin' && p.email?.toLowerCase() !== 'admin@dailybureau.org'
+        );
+        const profileIds = new Set(validProfiles.map((p) => p.id));
+        const profileEmails = new Set(validProfiles.map((p) => p.email.toLowerCase()));
 
-        const formattedUsers: User[] = cloudProfiles.map((p) => {
+        const formattedUsers: User[] = validProfiles.map((p) => {
           const username = p.email ? p.email.split('@')[0] : p.id;
           const existing = localUsers.find(
             (u) => u.id === p.id || u.username.toLowerCase() === username.toLowerCase()
           );
+          const isAdminUser = isMasterAdmin(p.email);
           return {
             id: p.id,
             username: existing?.username || username,
-            password: existing?.password || '',
+            password: '',
             name: p.name || username,
             email: p.email,
-            role: p.role,
+            role: isAdminUser ? 'admin' : 'member',
             avatar: p.avatarUrl || existing?.avatar,
-            title: existing?.title || (p.role === 'admin' ? 'Chief Bureau Administrator' : 'Field Operative'),
+            title: existing?.title || (isAdminUser ? 'Chief Bureau Administrator' : 'Field Operative'),
             department: existing?.department || 'Dispatch & Logistics',
             deskNumber: existing?.deskNumber || `DK-${p.id.slice(0, 4).toUpperCase()}`,
             createdAt: existing?.createdAt || new Date().toISOString(),
@@ -143,10 +137,12 @@ export default function AdminDashboardPage() {
         ];
         setUsers(merged);
 
-        // If no user selected yet, select the first one by default
-        if (!selectedUser && merged.length > 0) {
-          setSelectedUser(merged[0]);
-        }
+        // Select the admin or first user by default
+        setSelectedUser((prev) => {
+          if (prev && merged.some((u) => u.id === prev.id)) return prev;
+          const masterAdminUser = merged.find((u) => isMasterAdmin(u.email));
+          return masterAdminUser || merged[0] || null;
+        });
       }
 
       if (cloudTasks && cloudTasks.length > 0) {
@@ -160,11 +156,11 @@ export default function AdminDashboardPage() {
   };
 
   useEffect(() => {
-    if (!isAdminUnlocked) return;
+    if (!authUser || !isMasterAdmin(authUser.email)) return;
     syncData();
     window.addEventListener(BUREAU_SYNC_EVENT, syncData);
     return () => window.removeEventListener(BUREAU_SYNC_EVENT, syncData);
-  }, [isAdminUnlocked]);
+  }, [authUser]);
 
   // ── Fetch selected user's notes whenever inspector targets a user ─────────
   useEffect(() => {
@@ -183,49 +179,6 @@ export default function AdminDashboardPage() {
       })
       .catch(() => setIsLoadingNotes(false));
   }, [selectedUser]);
-
-  // ── Handle Clearance Gate Submission ─────────────────────────────────────
-  const handleClearanceLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setGateError('');
-    setGateSubmitting(true);
-    playTypewriterClick();
-
-    const u = adminUsernameInput.trim().toLowerCase();
-    const p = adminPasswordInput.trim();
-
-    // Verify against registered admin accounts or master passkey
-    const localUsers = getUsers();
-    const adminAccount = localUsers.find(
-      (acc) => acc.username.toLowerCase() === 'admin' || acc.role === 'admin'
-    );
-    const validPassword = adminAccount?.password || 'password';
-
-    const isValid = (u === 'admin' && p === validPassword) || (u === 'admin' && p === 'password');
-
-    setTimeout(() => {
-      if (isValid) {
-        playRubberStampSound();
-        sessionStorage.setItem('bureau_admin_unlocked', 'true');
-        setIsAdminUnlocked(true);
-        setGateSubmitting(false);
-        syncData();
-      } else {
-        setGateError('ACCESS DENIED — Invalid Clearance Identifier or Executive Passkey.');
-        setGateSubmitting(false);
-      }
-    }, 200);
-  };
-
-  // ── Lock Admin Terminal ───────────────────────────────────────────────────
-  const handleLockTerminal = () => {
-    playTypewriterClick();
-    sessionStorage.removeItem('bureau_admin_unlocked');
-    setIsAdminUnlocked(false);
-    setAdminUsernameInput('');
-    setAdminPasswordInput('');
-    setGateError('');
-  };
 
   // ── Reward Claim Management ───────────────────────────────────────────────
   const handleApproveClaim = (claimId: string) => {
@@ -254,11 +207,26 @@ export default function AdminDashboardPage() {
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 1. CLEARANCE GATE VIEW (LOCKED)
+  // 1. EXECUTIVE AUTHENTICATION GUARDS
   // ═══════════════════════════════════════════════════════════════════════════
-  if (!isAdminUnlocked) {
+  if (authLoading) {
     return (
-      <div style={{ maxWidth: '440px', margin: '3.5rem auto', padding: '0 1rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: '1rem' }}>
+        <img
+          src="/bureau_crest.jpg"
+          alt="Bureau Seal"
+          style={{ width: '64px', height: '64px', borderRadius: '50%', border: '2px solid var(--brass-gold)', opacity: 0.8 }}
+        />
+        <div className="typewriter-text" style={{ fontSize: '0.84rem', color: 'var(--ink-secondary)', letterSpacing: '0.12em', fontWeight: 700 }}>
+          VERIFYING EXECUTIVE CLEARANCE...
+        </div>
+      </div>
+    );
+  }
+
+  if (!authUser) {
+    return (
+      <div style={{ maxWidth: '440px', margin: '3.5rem auto', padding: '0 1rem', textAlign: 'center' }}>
         <div
           className="vintage-paper"
           style={{
@@ -266,10 +234,49 @@ export default function AdminDashboardPage() {
             borderTop: '5px solid var(--stamp-red)',
             backgroundColor: 'var(--bg-card)',
             boxShadow: 'var(--paper-shadow-lg)',
-            textAlign: 'center',
           }}
         >
-          {/* Bureau Seal */}
+          <img
+            src="/bureau_crest.jpg"
+            alt="Bureau Seal"
+            style={{ width: '72px', height: '72px', borderRadius: '50%', border: '2px solid var(--brass-gold)', margin: '0 auto 1.25rem', display: 'block' }}
+          />
+          <div
+            className="typewriter-text"
+            style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--stamp-red)', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: '0.35rem' }}
+          >
+            SESSION AUTHENTICATION REQUIRED
+          </div>
+          <h2 className="serif-display" style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--ink-primary)', marginBottom: '0.75rem' }}>
+            Officer Not Signed In
+          </h2>
+          <p style={{ fontSize: '0.83rem', color: 'var(--ink-secondary)', marginBottom: '1.75rem', lineHeight: 1.5 }}>
+            You must be authenticated with Google as the Chief Administrator to access this executive oversight terminal.
+          </p>
+          <Link
+            href="/login"
+            className="btn-brass"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.75rem', textDecoration: 'none' }}
+          >
+            <span>Sign In with Google</span>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isMasterAdmin(authUser.email)) {
+    return (
+      <div style={{ maxWidth: '480px', margin: '3.5rem auto', padding: '0 1rem', textAlign: 'center' }}>
+        <div
+          className="vintage-paper"
+          style={{
+            padding: '2.5rem 2.25rem',
+            borderTop: '5px solid var(--stamp-red)',
+            backgroundColor: 'var(--bg-card)',
+            boxShadow: 'var(--paper-shadow-lg)',
+          }}
+        >
           <div style={{ position: 'relative', display: 'inline-block', marginBottom: '1.25rem' }}>
             <img
               src="/bureau_crest.jpg"
@@ -278,7 +285,7 @@ export default function AdminDashboardPage() {
                 width: '72px',
                 height: '72px',
                 borderRadius: '50%',
-                border: '2.5px solid var(--brass-gold)',
+                border: '2.5px solid var(--stamp-red)',
                 objectFit: 'cover',
                 boxShadow: '0 4px 14px rgba(0,0,0,0.15)',
               }}
@@ -318,141 +325,39 @@ export default function AdminDashboardPage() {
               fontSize: '1.85rem',
               fontWeight: 800,
               lineHeight: 1.2,
-              marginBottom: '0.5rem',
+              marginBottom: '0.75rem',
               color: 'var(--ink-primary)',
             }}
           >
-            Admin Oversight Gate
+            Access Prohibited
           </h2>
-          <p
+          <div
             style={{
-              fontSize: '0.82rem',
-              color: 'var(--ink-secondary)',
+              backgroundColor: 'var(--stamp-red-bg)',
+              border: '1px solid var(--stamp-red)',
+              borderRadius: '4px',
+              padding: '0.85rem 1rem',
               marginBottom: '1.75rem',
-              lineHeight: 1.5,
+              textAlign: 'left',
+              fontSize: '0.82rem',
+              color: 'var(--stamp-red)',
+              lineHeight: 1.55,
             }}
           >
-            Manual executive authorization is required to access staff ledgers, daily routine oversight, and personnel registers.
-          </p>
+            <strong>Clearance Refused:</strong> This executive terminal is strictly restricted to the Chief Bureau Administrator (<strong>freefirejeeva2810@gmail.com</strong>). Your signed-in account (<code>{authUser.email}</code>) does not possess executive oversight credentials.
+          </div>
 
-          {/* Error Message */}
-          {gateError && (
-            <div
-              style={{
-                backgroundColor: 'var(--stamp-red-bg)',
-                border: '1px solid var(--stamp-red)',
-                borderRadius: '4px',
-                padding: '0.65rem 0.85rem',
-                marginBottom: '1.25rem',
-                fontSize: '0.78rem',
-                color: 'var(--stamp-red)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                textAlign: 'left',
-              }}
-            >
-              <ShieldAlert size={16} style={{ flexShrink: 0 }} />
-              <span>{gateError}</span>
-            </div>
-          )}
-
-          {/* Passkey Form */}
-          <form onSubmit={handleClearanceLogin} style={{ textAlign: 'left' }}>
-            <div style={{ marginBottom: '1rem' }}>
-              <label
-                className="typewriter-text"
-                style={{
-                  display: 'block',
-                  fontSize: '0.72rem',
-                  fontWeight: 700,
-                  letterSpacing: '0.06em',
-                  color: 'var(--ink-primary)',
-                  marginBottom: '0.35rem',
-                }}
-              >
-                CLEARANCE IDENTIFIER
-              </label>
-              <input
-                type="text"
-                value={adminUsernameInput}
-                onChange={(e) => setAdminUsernameInput(e.target.value)}
-                placeholder="e.g. admin"
-                required
-                className="vintage-input"
-                style={{
-                  width: '100%',
-                  padding: '0.65rem 0.85rem',
-                  fontSize: '0.85rem',
-                  backgroundColor: 'var(--bg-parchment)',
-                  border: '1px solid var(--border-sepia)',
-                  borderRadius: '3px',
-                }}
-              />
-            </div>
-
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label
-                className="typewriter-text"
-                style={{
-                  display: 'block',
-                  fontSize: '0.72rem',
-                  fontWeight: 700,
-                  letterSpacing: '0.06em',
-                  color: 'var(--ink-primary)',
-                  marginBottom: '0.35rem',
-                }}
-              >
-                EXECUTIVE PASSKEY
-              </label>
-              <input
-                type="password"
-                value={adminPasswordInput}
-                onChange={(e) => setAdminPasswordInput(e.target.value)}
-                placeholder="••••••••"
-                required
-                className="vintage-input"
-                style={{
-                  width: '100%',
-                  padding: '0.65rem 0.85rem',
-                  fontSize: '0.85rem',
-                  backgroundColor: 'var(--bg-parchment)',
-                  border: '1px solid var(--border-sepia)',
-                  borderRadius: '3px',
-                }}
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={gateSubmitting}
-              className="btn-brass"
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                fontSize: '0.85rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-              }}
-            >
-              <ShieldCheck size={16} />
-              <span>{gateSubmitting ? 'VERIFYING CREDENTIALS...' : 'AUTHENTICATE CLEARANCE'}</span>
-            </button>
-          </form>
-
-          {/* Footer Back link */}
-          <div style={{ marginTop: '1.5rem', borderTop: '1px dashed var(--border-sepia)', paddingTop: '1rem' }}>
+          <div>
             <Link
               href="/"
+              className="btn-parchment"
               style={{
-                fontSize: '0.78rem',
-                color: 'var(--ink-muted)',
-                textDecoration: 'none',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '0.35rem',
+                gap: '0.5rem',
+                padding: '0.65rem 1.25rem',
+                fontSize: '0.82rem',
+                textDecoration: 'none',
               }}
             >
               <span>← Return to My Work Desk</span>
@@ -598,21 +503,6 @@ export default function AdminDashboardPage() {
               <Users size={14} style={{ color: 'var(--ink-secondary)' }} />
               <span>Team Roster</span>
             </Link>
-
-            <button
-              onClick={handleLockTerminal}
-              className="btn-brass"
-              style={{
-                padding: '0.55rem 0.95rem',
-                fontSize: '0.78rem',
-                backgroundColor: 'var(--stamp-red)',
-                borderColor: 'var(--stamp-red)',
-              }}
-              title="Lock Admin Terminal"
-            >
-              <Lock size={14} />
-              <span>Lock Terminal</span>
-            </button>
           </div>
         </div>
       </div>
@@ -790,12 +680,12 @@ export default function AdminDashboardPage() {
                         fontWeight: 700,
                         padding: '0.1rem 0.35rem',
                         borderRadius: '2px',
-                        backgroundColor: u.role === 'admin' ? 'var(--stamp-red-bg)' : 'var(--bg-card)',
-                        color: u.role === 'admin' ? 'var(--stamp-red)' : 'var(--stamp-blue)',
+                        backgroundColor: isMasterAdmin(u.email) ? 'var(--stamp-red-bg)' : 'var(--bg-card)',
+                        color: isMasterAdmin(u.email) ? 'var(--stamp-red)' : 'var(--stamp-blue)',
                         border: '1px solid var(--border-sepia)',
                       }}
                     >
-                      {u.role === 'admin' ? 'ADMIN' : 'STAFF'}
+                      {isMasterAdmin(u.email) ? 'ADMIN' : 'STAFF'}
                     </span>
                     {pendingCount > 0 && (
                       <span style={{ fontSize: '0.65rem', color: 'var(--stamp-red)', fontWeight: 700 }}>
@@ -858,12 +748,12 @@ export default function AdminDashboardPage() {
                           fontWeight: 700,
                           padding: '0.15rem 0.5rem',
                           borderRadius: '3px',
-                          backgroundColor: selectedUser.role === 'admin' ? 'var(--stamp-red-bg)' : 'var(--stamp-blue-bg)',
-                          color: selectedUser.role === 'admin' ? 'var(--stamp-red)' : 'var(--stamp-blue)',
+                          backgroundColor: isMasterAdmin(selectedUser.email) ? 'var(--stamp-red-bg)' : 'var(--stamp-blue-bg)',
+                          color: isMasterAdmin(selectedUser.email) ? 'var(--stamp-red)' : 'var(--stamp-blue)',
                           border: '1px solid var(--border-sepia)',
                         }}
                       >
-                        {selectedUser.role === 'admin' ? '★ Chief Administrator' : 'Field Operative'}
+                        {isMasterAdmin(selectedUser.email) ? '★ Chief Administrator' : 'Field Operative'}
                       </span>
                     </div>
                     <div style={{ fontSize: '0.8rem', color: 'var(--ink-secondary)', marginTop: '0.15rem' }}>

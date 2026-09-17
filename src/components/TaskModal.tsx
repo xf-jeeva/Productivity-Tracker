@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Task, User, TaskPriority, ItemType } from '../types';
 import { getUsers, getCurrentUser, createTask, updateTask } from '../lib/storage';
+import { useAuth } from './AuthProvider';
 import { playRubberStampSound, playTypewriterClick } from '../lib/sound';
 import { X, Plus, Trash2, Stamp, Calendar, Clock, Bell, Repeat, CheckSquare } from 'lucide-react';
 
@@ -14,6 +15,7 @@ interface TaskModalProps {
 }
 
 export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = 'task' }: TaskModalProps) {
+  const { user: authUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [itemType, setItemType] = useState<ItemType>(defaultType);
   const [title, setTitle] = useState('');
@@ -29,6 +31,21 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
 
   useEffect(() => {
     const loadedUsers = getUsers();
+    if (authUser && !loadedUsers.some((u) => u.id === authUser.id)) {
+      loadedUsers.unshift({
+        id: authUser.id,
+        username: authUser.email ? authUser.email.split('@')[0] : authUser.id,
+        password: '',
+        name: authUser.name,
+        email: authUser.email,
+        role: authUser.role,
+        avatar: authUser.avatarUrl || undefined,
+        title: authUser.role === 'admin' ? 'Chief Bureau Administrator' : 'Field Operative',
+        department: 'Dispatch & Logistics',
+        deskNumber: `DK-${authUser.id.slice(0, 4).toUpperCase()}`,
+        createdAt: new Date().toISOString(),
+      });
+    }
     setUsers(loadedUsers);
 
     if (taskToEdit) {
@@ -47,7 +64,7 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
       setItemType(defaultType);
       setTitle('');
       setDescription('');
-      setAssigneeId(current?.id || loadedUsers[0]?.id || 'usr-admin');
+      setAssigneeId(authUser?.id || current?.id || loadedUsers[0]?.id || '');
       setPriority('routine');
       setCategory('Atelier & Craft');
       setReminderTime('');

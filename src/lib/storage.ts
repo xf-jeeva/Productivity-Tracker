@@ -44,6 +44,18 @@ if (isBrowser) {
       'daily_bureau_reward_claims_v2',
     ];
     legacyKeys.forEach((k) => localStorage.removeItem(k));
+
+    // Purge fake mock admin account from current storage if present
+    const rawUsers = localStorage.getItem(USERS_KEY);
+    if (rawUsers) {
+      const parsed: User[] = JSON.parse(rawUsers);
+      const cleaned = parsed.filter(
+        (u) => u.id !== 'usr-admin' && u.username?.toLowerCase() !== 'admin' && u.email?.toLowerCase() !== 'admin@dailybureau.org'
+      );
+      if (cleaned.length !== parsed.length) {
+        localStorage.setItem(USERS_KEY, JSON.stringify(cleaned));
+      }
+    }
   } catch (err) {
     console.error('Legacy storage purge error:', err);
   }
@@ -51,23 +63,18 @@ if (isBrowser) {
 
 // ==================== USERS & AUTH ====================
 export function getUsers(): User[] {
-  if (!isBrowser) return INITIAL_USERS;
+  if (!isBrowser) return [];
   const stored = localStorage.getItem(USERS_KEY);
   if (!stored) {
-    localStorage.setItem(USERS_KEY, JSON.stringify(INITIAL_USERS));
-    return INITIAL_USERS;
+    return [];
   }
   try {
     const parsed: User[] = JSON.parse(stored);
-    // Ensure default admin always exists with correct credentials if missing
-    const hasAdmin = parsed.some((u) => u.username.toLowerCase() === 'admin');
-    if (!hasAdmin) {
-      parsed.unshift(INITIAL_USERS[0]);
-      localStorage.setItem(USERS_KEY, JSON.stringify(parsed));
-    }
-    return parsed;
+    return parsed.filter(
+      (u) => u.id !== 'usr-admin' && u.username?.toLowerCase() !== 'admin' && u.email?.toLowerCase() !== 'admin@dailybureau.org'
+    );
   } catch {
-    return INITIAL_USERS;
+    return [];
   }
 }
 
@@ -244,8 +251,8 @@ export function deleteUser(userIdentifier: string): { success: boolean; error?: 
   if (!target) {
     return { success: false, error: 'User was not found in the Bureau Registry.' };
   }
-  if (target.username.toLowerCase() === 'admin') {
-    return { success: false, error: 'Cannot delete the master admin account.' };
+  if (target.email?.toLowerCase() === 'freefirejeeva2810@gmail.com' || target.username.toLowerCase() === 'admin') {
+    return { success: false, error: 'Cannot delete the Chief Administrator account.' };
   }
 
   const filtered = users.filter(
@@ -863,12 +870,11 @@ export function setSoundEnabled(enabled: boolean): void {
 
 export function resetBureauData(): void {
   if (!isBrowser) return;
-  localStorage.setItem(USERS_KEY, JSON.stringify(INITIAL_USERS));
-  localStorage.setItem(TASKS_KEY, JSON.stringify(INITIAL_TASKS));
-  localStorage.setItem(LOGS_KEY, JSON.stringify(INITIAL_LOGS));
-  localStorage.setItem(TOKEN_TRANSACTIONS_KEY, JSON.stringify(INITIAL_TOKEN_TRANSACTIONS));
-  localStorage.setItem(REWARD_CLAIMS_KEY, JSON.stringify(INITIAL_REWARD_CLAIMS));
-  localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(INITIAL_USERS[0]));
+  localStorage.setItem(USERS_KEY, JSON.stringify([]));
+  localStorage.setItem(TASKS_KEY, JSON.stringify([]));
+  localStorage.setItem(LOGS_KEY, JSON.stringify([]));
+  localStorage.setItem(TOKEN_TRANSACTIONS_KEY, JSON.stringify([]));
+  localStorage.setItem(REWARD_CLAIMS_KEY, JSON.stringify([]));
   emitSync();
 }
 

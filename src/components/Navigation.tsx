@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from './AuthProvider';
+import { isMasterAdmin } from '../lib/auth';
 import { playTypewriterClick } from '../lib/sound';
 import { CheckSquare, ShieldCheck, Users, BookOpen } from 'lucide-react';
 
@@ -11,7 +12,7 @@ export default function Navigation() {
   const pathname = usePathname();
   const { user } = useAuth();
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isMasterAdmin(user?.email);
 
   const navItems = [
     {
