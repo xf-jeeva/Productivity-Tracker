@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { AuthUser, getAuthUser, onAuthStateChange } from '../lib/auth';
+import { AuthUser, getAuthUser, onAuthStateChange, hasLocalAuthSession } from '../lib/auth';
 import { setCurrentUser, getUsers } from '../lib/storage';
 import { User } from '../types';
 
@@ -79,7 +79,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {}
     return null;
   });
-  const [loading, setLoading] = useState(true);
+  // If no auth token in localStorage, we know immediately that the user is not signed in
+  const [loading, setLoading] = useState(() => hasLocalAuthSession());
 
   const applyUser = (u: AuthUser | null) => {
     setUser(u);
@@ -92,6 +93,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    if (!hasLocalAuthSession()) {
+      setLoading(false);
+      return;
+    }
+
     // Initial load
     getAuthUser().then((u) => {
       applyUser(u);

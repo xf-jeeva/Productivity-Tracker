@@ -2,18 +2,25 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getAuthUser, signInWithGoogle } from '@/lib/auth';
+import { getAuthUser, signInWithGoogle, hasLocalAuthSession } from '@/lib/auth';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { ShieldAlert, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [checking, setChecking] = useState(true);
+  // If no auth token in localStorage, display the login form immediately (0ms delay)!
+  const [checking, setChecking] = useState(() => hasLocalAuthSession());
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
 
   useEffect(() => {
-    // If already signed in, go to their page immediately
+    // If no session exists in localStorage, we are already ready to show the Google button
+    if (!hasLocalAuthSession()) {
+      setChecking(false);
+      return;
+    }
+
+    // Only verify session if a token actually exists in localStorage
     getAuthUser().then((user) => {
       if (user) {
         router.replace('/');

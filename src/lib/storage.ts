@@ -481,6 +481,9 @@ export function restoreTask(taskId: string): boolean {
     status: 'pending',
     deletedAt: undefined,
     deletedBy: undefined,
+    completedAt: undefined,
+    completedBy: undefined,
+    tokenAwarded: false,
   };
 
   if (isBrowser) {

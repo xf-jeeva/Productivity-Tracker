@@ -74,7 +74,7 @@ export default function CloudUserSync() {
           mergedMap.set(ct.id, ct);
         }
 
-        // Smart merge with local tasks: ensure completed tasks are NEVER reverted to pending
+        // Smart merge with local tasks: deleted always takes precedence over older states
         for (const lt of localTasks) {
           if (!mergedMap.has(lt.id)) {
             // Task exists only locally -> keep it and upload to cloud
@@ -82,13 +82,25 @@ export default function CloudUserSync() {
             pushCloudTask(lt).catch(() => {});
           } else {
             const ct = mergedMap.get(lt.id)!;
-            // If local task was stamped completed and cloud hasn't recorded it yet
-            if (lt.status === 'completed' && ct.status !== 'completed') {
+            // 1. DELETED STATUS PRECEDENCE:
+            if (ct.status === 'deleted') {
+              // Cloud recorded deletion -> KEEP DELETED. Do NOT resurrect with local status!
+              mergedMap.set(ct.id, ct);
+            } else if (lt.status === 'deleted') {
+              // Local deleted it -> mark deleted and push to cloud
               mergedMap.set(lt.id, lt);
               pushCloudTask(lt).catch(() => {});
-            } else if (lt.status === 'deleted' && ct.status !== 'deleted') {
+            } 
+            // 2. COMPLETED STATUS PRECEDENCE (if neither is deleted):
+            else if (ct.status === 'completed') {
+              mergedMap.set(ct.id, ct);
+            } else if (lt.status === 'completed') {
               mergedMap.set(lt.id, lt);
               pushCloudTask(lt).catch(() => {});
+            } 
+            // 3. Otherwise, cloud is the authority
+            else {
+              mergedMap.set(ct.id, ct);
             }
           }
         }

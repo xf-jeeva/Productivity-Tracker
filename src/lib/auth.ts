@@ -12,6 +12,23 @@ export type AuthUser = {
   role: 'admin' | 'member';
 };
 
+// Quick synchronous check: does localStorage contain a Supabase auth token?
+export function hasLocalAuthSession(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+        const val = localStorage.getItem(key);
+        if (val && val !== 'null' && val !== '{}' && val !== '""') {
+          return true;
+        }
+      }
+    }
+  } catch {}
+  return false;
+}
+
 // ── Get current session ────────────────────────────────────────────────────
 export async function getSession(): Promise<Session | null> {
   if (!supabase) return null;
@@ -22,23 +39,27 @@ export async function getSession(): Promise<Session | null> {
 // ── Get current auth user + their profile (role, name, etc.) ──────────────
 export async function getAuthUser(): Promise<AuthUser | null> {
   if (!supabase) return null;
-  try {
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (user && !error) {
-      return await fetchProfile(user);
-    }
-  } catch (e) {
-    console.warn('getUser check notice, falling back to session:', e);
-  }
+  // If no auth token in local storage, this is a new visitor — return null immediately in 0ms!
+  if (!hasLocalAuthSession()) return null;
 
-  // Fallback to local session if getUser network call fails or is delayed
+  // 1. Instant fast path: check local cached session in 0ms
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
       return await fetchProfile(session.user);
     }
   } catch (e) {
-    console.warn('getSession fallback error:', e);
+    console.warn('getSession notice:', e);
+  }
+
+  // 2. Fallback to getUser() if session needed refresh
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (user && !error) {
+      return await fetchProfile(user);
+    }
+  } catch (e) {
+    console.warn('getUser check notice:', e);
   }
 
   return null;

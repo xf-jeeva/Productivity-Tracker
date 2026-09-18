@@ -117,15 +117,16 @@ export default function MyDeskPage() {
     const tAssignee = t.assigneeId?.toLowerCase();
     const tCreator = t.createdById?.toLowerCase();
     const tUsername = t.createdByUsername?.toLowerCase();
+    const tDeletedBy = t.deletedBy?.toLowerCase();
 
     // Direct ID match
-    if (uid && (tAssignee === uid || tCreator === uid)) return true;
+    if (uid && (tAssignee === uid || tCreator === uid || tDeletedBy === uid)) return true;
     // Email match
-    if (uemail && (tAssignee === uemail || tCreator === uemail || tUsername === uemail)) return true;
+    if (uemail && (tAssignee === uemail || tCreator === uemail || tUsername === uemail || tDeletedBy === uemail)) return true;
     // Handle match
-    if (uhandle && (tAssignee === uhandle || tCreator === uhandle || tUsername === uhandle)) return true;
+    if (uhandle && (tAssignee === uhandle || tCreator === uhandle || tUsername === uhandle || tDeletedBy === uhandle)) return true;
     // Name match
-    if (uname && (tAssignee === uname || tCreator === uname || tUsername === uname)) return true;
+    if (uname && (tAssignee === uname || tCreator === uname || tUsername === uname || tDeletedBy === uname)) return true;
 
     // Fallback for default local tasks
     if ((!t.assigneeId || t.assigneeId === 'usr-default') && (!t.createdById || t.createdById === 'usr-default')) {

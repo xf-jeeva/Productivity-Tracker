@@ -163,10 +163,20 @@ export default function AdminDashboardPage() {
             mergedMap.set(lt.id, lt);
           } else {
             const ct = mergedMap.get(lt.id)!;
-            if (lt.status === 'completed' && ct.status !== 'completed') {
+            // 1. DELETED STATUS PRECEDENCE:
+            // Cloud recorded deletion -> admin MUST see it as deleted! Local completed/pending cannot undo it.
+            if (ct.status === 'deleted') {
+              mergedMap.set(ct.id, ct);
+            } else if (lt.status === 'deleted') {
               mergedMap.set(lt.id, lt);
-            } else if (lt.status === 'deleted' && ct.status !== 'deleted') {
+            } 
+            // 2. COMPLETED STATUS PRECEDENCE (if neither is deleted):
+            else if (ct.status === 'completed') {
+              mergedMap.set(ct.id, ct);
+            } else if (lt.status === 'completed') {
               mergedMap.set(lt.id, lt);
+            } else {
+              mergedMap.set(ct.id, ct);
             }
           }
         }
@@ -174,6 +184,9 @@ export default function AdminDashboardPage() {
           (a, b) => (b.orderNumber || 0) - (a.orderNumber || 0)
         );
         setTasks(mergedTasks);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('daily_bureau_tasks_v3', JSON.stringify(mergedTasks));
+        }
       }
     } catch (err) {
       console.warn('Admin cloud sync note:', err);
@@ -430,12 +443,13 @@ export default function AdminDashboardPage() {
         const tAssignee = t.assigneeId?.toLowerCase();
         const tCreator = t.createdById?.toLowerCase();
         const tUsername = t.createdByUsername?.toLowerCase();
+        const tDeletedBy = t.deletedBy?.toLowerCase();
 
-        if (uid && (tAssignee === uid || tCreator === uid)) return true;
-        if (uemail && (tAssignee === uemail || tCreator === uemail || tUsername === uemail)) return true;
-        if (uusername && (tAssignee === uusername || tCreator === uusername || tUsername === uusername)) return true;
-        if (uhandle && (tAssignee === uhandle || tCreator === uhandle || tUsername === uhandle)) return true;
-        if (uname && (tAssignee === uname || tCreator === uname || tUsername === uname)) return true;
+        if (uid && (tAssignee === uid || tCreator === uid || tDeletedBy === uid)) return true;
+        if (uemail && (tAssignee === uemail || tCreator === uemail || tUsername === uemail || tDeletedBy === uemail)) return true;
+        if (uusername && (tAssignee === uusername || tCreator === uusername || tUsername === uusername || tDeletedBy === uusername)) return true;
+        if (uhandle && (tAssignee === uhandle || tCreator === uhandle || tUsername === uhandle || tDeletedBy === uhandle)) return true;
+        if (uname && (tAssignee === uname || tCreator === uname || tUsername === uname || tDeletedBy === uname)) return true;
 
         if ((!t.assigneeId || t.assigneeId === 'usr-default') && (!t.createdById || t.createdById === 'usr-default') && users[0]?.id === selectedUser.id) {
           return true;
@@ -711,12 +725,13 @@ export default function AdminDashboardPage() {
                 const tAssignee = t.assigneeId?.toLowerCase();
                 const tCreator = t.createdById?.toLowerCase();
                 const tUsername = t.createdByUsername?.toLowerCase();
+                const tDeletedBy = t.deletedBy?.toLowerCase();
 
-                if (uid && (tAssignee === uid || tCreator === uid)) return true;
-                if (uemail && (tAssignee === uemail || tCreator === uemail || tUsername === uemail)) return true;
-                if (uusername && (tAssignee === uusername || tCreator === uusername || tUsername === uusername)) return true;
-                if (uhandle && (tAssignee === uhandle || tCreator === uhandle || tUsername === uhandle)) return true;
-                if (uname && (tAssignee === uname || tCreator === uname || tUsername === uname)) return true;
+                if (uid && (tAssignee === uid || tCreator === uid || tDeletedBy === uid)) return true;
+                if (uemail && (tAssignee === uemail || tCreator === uemail || tUsername === uemail || tDeletedBy === uemail)) return true;
+                if (uusername && (tAssignee === uusername || tCreator === uusername || tUsername === uusername || tDeletedBy === uusername)) return true;
+                if (uhandle && (tAssignee === uhandle || tCreator === uhandle || tUsername === uhandle || tDeletedBy === uhandle)) return true;
+                if (uname && (tAssignee === uname || tCreator === uname || tUsername === uname || tDeletedBy === uname)) return true;
 
                 if ((!t.assigneeId || t.assigneeId === 'usr-default') && (!t.createdById || t.createdById === 'usr-default') && users[0]?.id === u.id) {
                   return true;
@@ -726,6 +741,7 @@ export default function AdminDashboardPage() {
               });
               const pendingCount = userTasks.filter((t) => t.status === 'pending' || t.status === 'in-progress').length;
               const completedCount = userTasks.filter((t) => t.status === 'completed').length;
+              const deletedCount = userTasks.filter((t) => t.status === 'deleted').length;
 
               return (
                 <button
@@ -793,6 +809,11 @@ export default function AdminDashboardPage() {
                     {completedCount > 0 && (
                       <span style={{ fontSize: '0.65rem', color: 'var(--stamp-green)', fontWeight: 700 }}>
                         {completedCount} completed
+                      </span>
+                    )}
+                    {deletedCount > 0 && (
+                      <span style={{ fontSize: '0.62rem', color: 'var(--ink-muted)' }}>
+                        {deletedCount} deleted
                       </span>
                     )}
                   </div>
