@@ -543,6 +543,52 @@ export function markTaskNotified(taskId: string, dateStr: string): void {
   }
 }
 
+/**
+ * Daily Routine Auto-Rollover for Next Day (12:00 AM Midnight):
+ * When a user completes a daily routine, it is completed for that day.
+ * As soon as midnight passes or on the new day, any completed daily routine
+ * automatically rolls over back into the active daily tasks list for today,
+ * with subtasks reset and ready to be checked off again.
+ */
+export function rolloverDailyRoutines(): { rolledOverCount: number } {
+  if (!isBrowser) return { rolledOverCount: 0 };
+  const tasks = getTasks();
+  const todayStr = new Date().toLocaleDateString('en-CA'); // Local YYYY-MM-DD
+  let rolledOverCount = 0;
+
+  const updatedTasks = tasks.map((t) => {
+    if (t.itemType === 'routine' && t.status === 'completed' && t.completedAt) {
+      const completedDateStr = new Date(t.completedAt).toLocaleDateString('en-CA');
+      if (completedDateStr < todayStr) {
+        rolledOverCount++;
+        const rolled: Task = {
+          ...t,
+          status: 'pending',
+          completedAt: undefined,
+          completedBy: undefined,
+          tokenAwarded: false,
+          tokensEarned: 0,
+          lastNotifiedDate: undefined,
+          subtasks: (t.subtasks || []).map((st) => ({ ...st, completed: false })),
+        };
+
+        if (isSupabaseConfigured) {
+          pushCloudTask(rolled).catch(() => {});
+        }
+        return rolled;
+      }
+    }
+    return t;
+  });
+
+  if (rolledOverCount > 0) {
+    localStorage.setItem(TASKS_KEY, JSON.stringify(updatedTasks));
+    emitSync();
+  }
+
+  return { rolledOverCount };
+}
+
 // ==================== QUERY TASKS PER USERNAME ====================
 export function getUserTasksBreakdown(username: string): {
   createdTasks: Task[];

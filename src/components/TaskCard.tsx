@@ -8,6 +8,7 @@ import {
   adminSignOff, 
   deleteTask, 
   restoreTask,
+  permanentDeleteTask,
   getCurrentUser, 
   getUserByUsername 
 } from '../lib/storage';
@@ -59,6 +60,32 @@ export default function TaskCard({ task, onEdit, showAssignee = true }: TaskCard
   const completedSubtasks = task.subtasks.filter((st) => st.completed).length;
   const subtaskProgress = totalSubtasks > 0 ? (completedSubtasks / totalSubtasks) * 100 : 0;
 
+  const isReminderDueNow = (() => {
+    if (!task.reminderTime || task.status === 'completed' || task.status === 'deleted') return false;
+    const now = new Date();
+    const parts = task.reminderTime.split(':');
+    if (parts.length < 2) return false;
+    const h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if (isNaN(h) || isNaN(m)) return false;
+    const currentMin = now.getHours() * 60 + now.getMinutes();
+    const reminderMin = h * 60 + m;
+    return currentMin >= reminderMin;
+  })();
+
+  const is10MinWarning = (() => {
+    if (!task.reminderTime || task.status === 'completed' || task.status === 'deleted') return false;
+    const now = new Date();
+    const parts = task.reminderTime.split(':');
+    if (parts.length < 2) return false;
+    const h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if (isNaN(h) || isNaN(m)) return false;
+    const currentMin = now.getHours() * 60 + now.getMinutes();
+    const reminderMin = h * 60 + m;
+    return currentMin >= reminderMin - 10 && currentMin < reminderMin;
+  })();
+
   const handleToggleSubtask = (subtaskId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (isDeleted) return;
@@ -108,6 +135,14 @@ export default function TaskCard({ task, onEdit, showAssignee = true }: TaskCard
     restoreTask(task.id);
   };
 
+  const handlePermanentDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm(`Permanently purge Dispatch Order № ${task.orderNumber}? This will remove it completely from your desk and the Bureau cloud database.`)) {
+      playTypewriterClick();
+      permanentDeleteTask(task.id);
+    }
+  };
+
   const handleAdminSignOff = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdmin || !currentUser) return;
@@ -128,11 +163,15 @@ export default function TaskCard({ task, onEdit, showAssignee = true }: TaskCard
           ? '4px solid var(--stamp-red)'
           : task.status === 'completed' 
             ? '4px solid var(--stamp-green)' 
-            : task.priority === 'opus' 
-              ? '4px solid var(--brass-gold)' 
-              : task.priority === 'urgent' 
-                ? '4px solid var(--stamp-red)' 
-                : '4px solid var(--border-sepia-dark)',
+            : isReminderDueNow
+              ? '5px solid var(--stamp-red)'
+              : is10MinWarning
+                ? '4px solid var(--brass-gold)'
+                : task.priority === 'opus' 
+                  ? '4px solid var(--brass-gold)' 
+                  : task.priority === 'urgent' 
+                    ? '4px solid var(--stamp-red)' 
+                    : '4px solid var(--border-sepia-dark)',
         position: 'relative',
         backgroundColor: isDeleted 
           ? 'var(--bg-parchment-deep)' 
@@ -221,17 +260,42 @@ export default function TaskCard({ task, onEdit, showAssignee = true }: TaskCard
                 fontWeight: 700,
                 padding: '0.15rem 0.45rem',
                 borderRadius: '2px',
-                backgroundColor: 'var(--stamp-red-bg)',
-                color: 'var(--stamp-red)',
-                border: '1px solid var(--stamp-red)',
+                backgroundColor: isReminderDueNow
+                  ? 'var(--stamp-red-bg)'
+                  : is10MinWarning
+                  ? 'var(--brass-glow)'
+                  : 'var(--stamp-blue-bg)',
+                color: isReminderDueNow
+                  ? 'var(--stamp-red)'
+                  : is10MinWarning
+                  ? 'var(--brass-dark)'
+                  : 'var(--stamp-blue)',
+                border: isReminderDueNow
+                  ? '1.5px solid var(--stamp-red)'
+                  : is10MinWarning
+                  ? '1.5px solid var(--brass-gold)'
+                  : '1px solid var(--border-sepia)',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.25rem',
+                animation: isReminderDueNow ? 'gentlePulse 2s infinite' : 'none',
               }}
-              title="Scheduled notification alert time"
+              title={
+                isReminderDueNow
+                  ? `Reminder time (${task.reminderTime}) reached! Pending action.`
+                  : is10MinWarning
+                  ? `Starts in 10 minutes (${task.reminderTime})!`
+                  : `Scheduled reminder alert time: ${task.reminderTime}`
+              }
             >
               <Bell size={10} />
-              <span>{task.reminderTime}</span>
+              <span>
+                {isReminderDueNow
+                  ? `DUE NOW (${task.reminderTime})`
+                  : is10MinWarning
+                  ? `10m ALERT (${task.reminderTime})`
+                  : task.reminderTime}
+              </span>
             </span>
           )}
 
@@ -492,15 +556,27 @@ export default function TaskCard({ task, onEdit, showAssignee = true }: TaskCard
           }}
         >
           {isDeleted ? (
-            <button
-              onClick={handleRestore}
-              className="btn-brass"
-              style={{ padding: '0.4rem 0.75rem', fontSize: '0.72rem', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-              title="Restore task to active"
-            >
-              <RotateCcw size={13} />
-              <span>Restore Task</span>
-            </button>
+            <>
+              <button
+                onClick={handleRestore}
+                className="btn-brass"
+                style={{ padding: '0.4rem 0.75rem', fontSize: '0.72rem', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                title="Restore task to active"
+              >
+                <RotateCcw size={13} />
+                <span>Restore Task</span>
+              </button>
+
+              <button
+                onClick={handlePermanentDelete}
+                className="btn-parchment"
+                style={{ padding: '0.4rem 0.75rem', fontSize: '0.72rem', color: 'var(--stamp-red)', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                title="Permanently purge task and remove from database"
+              >
+                <Trash2 size={13} />
+                <span>Purge Permanently</span>
+              </button>
+            </>
           ) : (
             <>
               {/* Mark Complete button */}

@@ -8,6 +8,7 @@ import { isMasterAdmin } from '@/lib/auth';
 import { 
   getTasks, 
   getCurrentUser,
+  rolloverDailyRoutines,
   BUREAU_SYNC_EVENT 
 } from '@/lib/storage';
 import { Task, ItemType } from '@/types';
@@ -32,6 +33,7 @@ import {
   Repeat,
   CheckSquare,
   Bell,
+  BellRing,
   Archive,
   Award,
   Coins,
@@ -86,6 +88,7 @@ export default function MyDeskPage() {
     }
 
     const sync = () => {
+      rolloverDailyRoutines();
       setTasks(getTasks());
       setIsLoading(false);
     };
@@ -132,10 +135,35 @@ export default function MyDeskPage() {
     return false;
   });
 
+  // Helper: has task reached or passed reminder time
+  const isReminderDueNow = (t: Task) => {
+    if (!t.reminderTime || t.status === 'completed' || t.status === 'deleted') return false;
+    const now = new Date();
+    const parts = t.reminderTime.split(':');
+    if (parts.length < 2) return false;
+    const h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if (isNaN(h) || isNaN(m)) return false;
+    const currentMin = now.getHours() * 60 + now.getMinutes();
+    const reminderMin = h * 60 + m;
+    return currentMin >= reminderMin;
+  };
+
   // 1. Daily Tasks (active)
   const myDailyTasks = myItems.filter(
     (t) => (t.itemType !== 'routine') && (t.status === 'pending' || t.status === 'in-progress')
   );
+
+  // Sort daily tasks so that any task that has reached reminder time floats to the very top!
+  const sortedDailyTasks = [...myDailyTasks].sort((a, b) => {
+    const aDue = isReminderDueNow(a);
+    const bDue = isReminderDueNow(b);
+    if (aDue && !bDue) return -1;
+    if (!aDue && bDue) return 1;
+    return (b.orderNumber || 0) - (a.orderNumber || 0);
+  });
+
+  const dueNowDailyTasks = myDailyTasks.filter(isReminderDueNow);
 
   // 2. Daily Routines (active)
   const myDailyRoutines = myItems.filter(
@@ -182,7 +210,7 @@ export default function MyDeskPage() {
     );
   };
 
-  const filteredDailyTasks = myDailyTasks.filter(matchesSearch);
+  const filteredDailyTasks = sortedDailyTasks.filter(matchesSearch);
   const filteredDailyRoutines = myDailyRoutines.filter(matchesSearch);
   const filteredCompleted = myCompletedItems.filter(matchesSearch);
   const filteredDeleted = myDeletedItems.filter(matchesSearch);
@@ -637,6 +665,32 @@ export default function MyDeskPage() {
             <p style={{ fontSize: '0.78rem', color: 'var(--ink-secondary)', marginBottom: '1rem' }}>
               Specific work dispatches scheduled for today. Both tasks and routines are fully editable with custom reminder times.
             </p>
+
+            {dueNowDailyTasks.length > 0 && (
+              <div
+                style={{
+                  padding: '0.75rem 0.9rem',
+                  backgroundColor: 'var(--stamp-red-bg)',
+                  border: '1.5px solid var(--stamp-red)',
+                  borderRadius: '4px',
+                  marginBottom: '1.1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  boxShadow: 'var(--paper-shadow)',
+                }}
+              >
+                <BellRing size={20} style={{ color: 'var(--stamp-red)', flexShrink: 0, animation: 'pulse 1.5s infinite' }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--stamp-red)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <span>🚨 Scheduled Reminder Time Reached ({dueNowDailyTasks.length})</span>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--ink-secondary)', marginTop: '0.15rem' }}>
+                    These daily orders have reached their scheduled reminder time and are prioritized at the top of your pending list for immediate completion.
+                  </div>
+                </div>
+              </div>
+            )}
 
             {filteredDailyTasks.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>

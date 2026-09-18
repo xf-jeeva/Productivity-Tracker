@@ -9,6 +9,8 @@ import {
   getTasks, 
   deleteTask,
   restoreTask,
+  permanentDeleteTask,
+  rolloverDailyRoutines,
   updateTask,
   markTaskComplete,
   adminSignOff,
@@ -23,6 +25,7 @@ import {
 import { getAllProfiles, isMasterAdmin } from '@/lib/auth';
 import { fetchAllCloudTasks } from '@/lib/cloudTasks';
 import { fetchCloudNotes } from '@/lib/cloudNotes';
+import { supabase } from '@/lib/supabase';
 
 import { User, Task, RewardClaim, StickyNote } from '@/types';
 import TaskModal from '@/components/TaskModal';
@@ -50,6 +53,7 @@ import {
   BookOpen,
   FileText,
   Repeat,
+  RotateCcw,
   Sparkles,
   ArrowRight,
   ExternalLink,
@@ -71,14 +75,14 @@ export default function AdminDashboardPage() {
   const [rewardClaims, setRewardClaims] = useState<RewardClaim[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
-  // User inspection view: 'tasks' | 'routines' | 'completed' | 'notes'
-  const [userTab, setUserTab] = useState<'tasks' | 'routines' | 'completed' | 'notes'>('tasks');
+  // User inspection view: 'tasks' | 'routines' | 'completed' | 'deleted' | 'notes'
+  const [userTab, setUserTab] = useState<'tasks' | 'routines' | 'completed' | 'deleted' | 'notes'>('tasks');
   const [inspectNotes, setInspectNotes] = useState<string>('');
   const [inspectStickyNotes, setInspectStickyNotes] = useState<StickyNote[]>([]);
   const [isLoadingNotes, setIsLoadingNotes] = useState<boolean>(false);
 
   // Global Ledger filter & search
-  const [ledgerFilter, setLedgerFilter] = useState<'all' | 'task' | 'routine' | 'pending' | 'completed'>('all');
+  const [ledgerFilter, setLedgerFilter] = useState<'all' | 'task' | 'routine' | 'pending' | 'completed' | 'deleted'>('all');
   const [ledgerSearch, setLedgerSearch] = useState<string>('');
 
   // Task edit modal
@@ -87,6 +91,7 @@ export default function AdminDashboardPage() {
 
   // ── Master data synchronization ───────────────────────────────────────────
   const syncData = async () => {
+    rolloverDailyRoutines();
     const rawLocalUsers = getUsers();
     // Exclude mock usr-admin
     const localUsers = rawLocalUsers.filter(
@@ -179,7 +184,28 @@ export default function AdminDashboardPage() {
     if (!authUser || !isMasterAdmin(authUser.email)) return;
     syncData();
     window.addEventListener(BUREAU_SYNC_EVENT, syncData);
-    return () => window.removeEventListener(BUREAU_SYNC_EVENT, syncData);
+
+    // Realtime subscription on bureau_tasks & bureau_notes to instantly reflect all user moves
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let channel: any = null;
+    if (supabase) {
+      channel = supabase
+        .channel('admin_live_task_watch')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'bureau_tasks' }, () => {
+          syncData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'bureau_notes' }, () => {
+          syncData();
+        })
+        .subscribe();
+    }
+
+    return () => {
+      window.removeEventListener(BUREAU_SYNC_EVENT, syncData);
+      if (channel && supabase) {
+        supabase.removeChannel(channel);
+      }
+    };
   }, [authUser]);
 
   // ── Fetch selected user's notes whenever inspector targets a user ─────────
@@ -426,6 +452,7 @@ export default function AdminDashboardPage() {
   const userCompletedTasks = userTasksOnly.filter((t) => t.status === 'completed');
   const userCompletedRoutines = userRoutinesOnly.filter((t) => t.status === 'completed');
   const userCompletedAll = userItems.filter((t) => t.status === 'completed');
+  const userDeletedTasks = userItems.filter((t) => t.status === 'deleted');
 
   const nonDeletedItems = userItems.filter((t) => t.status !== 'deleted');
   const userCompletionRate = nonDeletedItems.length > 0
@@ -438,6 +465,8 @@ export default function AdminDashboardPage() {
     if (ledgerFilter === 'routine' && t.itemType !== 'routine') return false;
     if (ledgerFilter === 'pending' && (t.status === 'completed' || t.status === 'deleted')) return false;
     if (ledgerFilter === 'completed' && t.status !== 'completed') return false;
+    if (ledgerFilter === 'deleted' && t.status !== 'deleted') return false;
+    if (ledgerFilter !== 'deleted' && ledgerFilter !== 'all' && t.status === 'deleted') return false;
 
     if (ledgerSearch.trim()) {
       const q = ledgerSearch.toLowerCase();
@@ -945,6 +974,30 @@ export default function AdminDashboardPage() {
                 <button
                   onClick={() => {
                     playTypewriterClick();
+                    setUserTab('deleted');
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    padding: '0.5rem 1rem',
+                    fontSize: '0.82rem',
+                    fontWeight: userTab === 'deleted' ? 700 : 500,
+                    color: userTab === 'deleted' ? 'var(--ink-primary)' : 'var(--ink-secondary)',
+                    backgroundColor: userTab === 'deleted' ? 'var(--bg-parchment)' : 'transparent',
+                    border: 'none',
+                    borderBottom: userTab === 'deleted' ? '3px solid var(--stamp-red)' : '3px solid transparent',
+                    cursor: 'pointer',
+                    borderRadius: '4px 4px 0 0',
+                  }}
+                >
+                  <Trash2 size={15} style={{ color: 'var(--stamp-red)' }} />
+                  <span>Deleted Archive ({userDeletedTasks.length})</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    playTypewriterClick();
                     setUserTab('notes');
                   }}
                   style={{
@@ -1287,7 +1340,129 @@ export default function AdminDashboardPage() {
                 </div>
               )}
 
-              {/* ── TAB 4: User Desk Notes & Memos ── */}
+              {/* ── TAB 4: User Deleted Archive ── */}
+              {userTab === 'deleted' && (
+                <div>
+                  {userDeletedTasks.length === 0 ? (
+                    <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--ink-muted)' }}>
+                      <Trash2 size={36} style={{ margin: '0 auto 0.75rem', opacity: 0.5 }} />
+                      <p style={{ fontSize: '0.85rem' }}>No deleted work orders or routines in this officer’s archive.</p>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {userDeletedTasks.map((item) => (
+                        <div
+                          key={item.id}
+                          style={{
+                            padding: '0.85rem 1rem',
+                            backgroundColor: 'var(--bg-parchment)',
+                            border: '1px solid var(--border-sepia)',
+                            borderLeft: '4px solid var(--stamp-red)',
+                            borderRadius: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                            gap: '0.75rem',
+                          }}
+                        >
+                          <div style={{ minWidth: '220px', flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                              <span className="typewriter-text" style={{ fontSize: '0.68rem', color: 'var(--brass-dark)', fontWeight: 700 }}>
+                                #{item.orderNumber}
+                              </span>
+                              <span
+                                className="typewriter-text"
+                                style={{
+                                  fontSize: '0.62rem',
+                                  padding: '0.1rem 0.4rem',
+                                  borderRadius: '2px',
+                                  backgroundColor: 'var(--stamp-red-bg)',
+                                  color: 'var(--stamp-red)',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                DELETED
+                              </span>
+                              <span
+                                className="typewriter-text"
+                                style={{
+                                  fontSize: '0.62rem',
+                                  padding: '0.1rem 0.4rem',
+                                  borderRadius: '2px',
+                                  backgroundColor: 'var(--bg-card)',
+                                  color: 'var(--ink-secondary)',
+                                  fontWeight: 700,
+                                  textTransform: 'uppercase',
+                                }}
+                              >
+                                {item.itemType || 'task'}
+                              </span>
+                            </div>
+
+                            <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--ink-primary)', textDecoration: 'line-through' }}>
+                              {item.title}
+                            </div>
+
+                            {item.description && (
+                              <div style={{ fontSize: '0.78rem', color: 'var(--ink-secondary)', marginTop: '0.2rem' }}>
+                                {item.description}
+                              </div>
+                            )}
+
+                            <div style={{ fontSize: '0.72rem', color: 'var(--stamp-red)', marginTop: '0.35rem' }}>
+                              <span>Deleted: {item.deletedAt ? new Date(item.deletedAt).toLocaleString() : 'Recently'} • </span>
+                              <span>By: @{item.deletedBy || selectedUser.name}</span>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <button
+                              onClick={() => {
+                                playTypewriterClick();
+                                restoreTask(item.id);
+                                syncData();
+                              }}
+                              className="btn-parchment"
+                              style={{ padding: '0.35rem 0.65rem', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                              title="Restore task to pending workstation list"
+                            >
+                              <RotateCcw size={12} />
+                              <span>Restore Order</span>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                if (confirm(`Permanently purge "${item.title}" from bureau database? This cannot be undone.`)) {
+                                  playTypewriterClick();
+                                  permanentDeleteTask(item.id);
+                                  syncData();
+                                }
+                              }}
+                              className="btn-parchment"
+                              style={{ 
+                                padding: '0.35rem 0.65rem', 
+                                fontSize: '0.72rem', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '0.35rem',
+                                color: 'var(--stamp-red)',
+                                borderColor: 'var(--stamp-red)'
+                              }}
+                              title="Purge permanently from Supabase & storage"
+                            >
+                              <Trash2 size={12} />
+                              <span>Purge Permanently</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── TAB 5: User Desk Notes & Memos ── */}
               {userTab === 'notes' && (
                 <div>
                   {isLoadingNotes ? (
@@ -1414,7 +1589,7 @@ export default function AdminDashboardPage() {
             </div>
 
             <div style={{ display: 'flex', gap: '0.35rem' }}>
-              {(['all', 'task', 'routine', 'pending', 'completed'] as const).map((mode) => (
+              {(['all', 'task', 'routine', 'pending', 'completed', 'deleted'] as const).map((mode) => (
                 <button
                   key={mode}
                   onClick={() => {
@@ -1488,7 +1663,7 @@ export default function AdminDashboardPage() {
                         </span>
                       </td>
                       <td style={{ padding: '0.65rem', maxWidth: '300px' }}>
-                        <div style={{ fontWeight: 700, color: 'var(--ink-primary)' }}>{t.title}</div>
+                        <div style={{ fontWeight: 700, color: 'var(--ink-primary)', textDecoration: t.status === 'deleted' ? 'line-through' : 'none' }}>{t.title}</div>
                         {t.description && (
                           <div style={{ fontSize: '0.74rem', color: 'var(--ink-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {t.description}
@@ -1529,14 +1704,47 @@ export default function AdminDashboardPage() {
                           style={{
                             fontSize: '0.68rem',
                             fontWeight: 700,
-                            color: t.status === 'completed' ? 'var(--stamp-green)' : 'var(--stamp-blue)',
+                            color: t.status === 'completed'
+                              ? 'var(--stamp-green)'
+                              : t.status === 'deleted'
+                              ? 'var(--stamp-red)'
+                              : 'var(--stamp-blue)',
                           }}
                         >
                           {t.status.toUpperCase()}
                         </span>
                       </td>
                       <td style={{ padding: '0.65rem', textAlign: 'right' }}>
-                        {t.status !== 'completed' && (
+                        {t.status === 'deleted' ? (
+                          <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
+                            <button
+                              onClick={() => {
+                                playTypewriterClick();
+                                restoreTask(t.id);
+                                syncData();
+                              }}
+                              className="btn-parchment"
+                              style={{ padding: '0.25rem 0.5rem', fontSize: '0.68rem' }}
+                              title="Restore task"
+                            >
+                              Restore
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm(`Permanently purge "${t.title}"?`)) {
+                                  playTypewriterClick();
+                                  permanentDeleteTask(t.id);
+                                  syncData();
+                                }
+                              }}
+                              className="btn-parchment"
+                              style={{ padding: '0.25rem 0.5rem', fontSize: '0.68rem', color: 'var(--stamp-red)' }}
+                              title="Purge permanently"
+                            >
+                              Purge
+                            </button>
+                          </div>
+                        ) : t.status !== 'completed' ? (
                           <button
                             onClick={() => handleAdminSignOff(t)}
                             className="btn-parchment"
@@ -1545,7 +1753,7 @@ export default function AdminDashboardPage() {
                           >
                             Sign-Off
                           </button>
-                        )}
+                        ) : null}
                       </td>
                     </tr>
                   );
