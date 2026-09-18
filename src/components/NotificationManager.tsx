@@ -359,6 +359,7 @@ export default function NotificationManager() {
       {/* Floating In-App Vintage Telegram Alert Toasts */}
       {activeAlerts.length > 0 && (
         <div
+          className="notification-toast-container"
           style={{
             position: 'fixed',
             bottom: '1.5rem',

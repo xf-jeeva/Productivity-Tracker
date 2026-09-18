@@ -244,6 +244,7 @@ export default function MyDeskPage() {
         }}
       >
         <div
+          className="masthead-responsive"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -296,7 +297,7 @@ export default function MyDeskPage() {
           </div>
 
           {/* Action buttons to create task or routine */}
-          <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="masthead-actions-responsive" style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <Link
               href="/team"
               className="btn-parchment"
@@ -356,12 +357,7 @@ export default function MyDeskPage() {
 
       {/* Metrics Row */}
       <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '1rem',
-          marginBottom: '1.5rem',
-        }}
+        className="metrics-grid-responsive"
       >
 
         {/* Daily Tasks Metric */}
@@ -545,7 +541,7 @@ export default function MyDeskPage() {
         }}
       >
         {/* Navigation View Tabs */}
-        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+        <div className="view-tabs-scroll-responsive" style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
           <button
             onClick={() => {
               playTypewriterClick();
@@ -567,7 +563,7 @@ export default function MyDeskPage() {
             style={{ padding: '0.45rem 0.85rem', fontSize: '0.76rem' }}
           >
             <CheckCircle2 size={13} style={{ color: 'var(--stamp-green)' }} />
-            <span>Completed Archive (Saved Separately) ({myCompletedItems.length})</span>
+            <span>Completed Archive ({myCompletedItems.length})</span>
           </button>
 
           <button
@@ -584,7 +580,7 @@ export default function MyDeskPage() {
         </div>
 
         {/* Search */}
-        <div style={{ position: 'relative', width: '220px' }}>
+        <div className="search-input-responsive" style={{ position: 'relative', width: '220px' }}>
           <input
             type="text"
             value={searchQuery}
@@ -611,13 +607,7 @@ export default function MyDeskPage() {
         /* ACTIVE VIEW: TWO DISTINCT EDITABLE SECTIONS (DAILY TASKS & DAILY ROUTINES) + STICKY NOTES */
         <>
         <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
-            gap: '1.5rem',
-            alignItems: 'start',
-            marginBottom: '1.5rem',
-          }}
+          className="desk-sections-grid"
         >
           {/* SECTION 1: DAILY TASKS */}
           <div

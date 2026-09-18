@@ -126,12 +126,13 @@ export default function ClaimRewardModal({ isOpen, onClose }: ClaimRewardModalPr
 
   return (
     <div
+      className="modal-overlay-responsive"
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(26, 20, 16, 0.75)',
-        backdropFilter: 'blur(3px)',
-        zIndex: 9999,
+        backgroundColor: 'rgba(20, 16, 12, 0.75)',
+        backdropFilter: 'blur(4px)',
+        zIndex: 1000,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -141,7 +142,7 @@ export default function ClaimRewardModal({ isOpen, onClose }: ClaimRewardModalPr
       onClick={onClose}
     >
       <div
-        className="vintage-paper"
+        className="vintage-paper modal-card-responsive"
         style={{
           width: '100%',
           maxWidth: '680px',

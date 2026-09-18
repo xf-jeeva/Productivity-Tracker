@@ -48,6 +48,7 @@ export default function Navigation() {
 
   return (
     <nav
+      className="desktop-nav-strip"
       style={{
         backgroundColor: 'var(--bg-card-alt)',
         borderBottom: '1px solid var(--border-sepia)',

@@ -158,6 +158,7 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
 
   return (
     <div
+      className="modal-overlay-responsive"
       style={{
         position: 'fixed',
         inset: 0,
@@ -172,7 +173,7 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
       onClick={onClose}
     >
       <div
-        className="vintage-paper"
+        className="vintage-paper modal-card-responsive"
         style={{
           width: '100%',
           maxWidth: '620px',

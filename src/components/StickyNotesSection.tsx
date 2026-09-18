@@ -441,11 +441,9 @@ export default function StickyNotesSection({ userId }: StickyNotesSectionProps) 
       </p>
 
       {/* Notes Grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
-        gap: '1rem',
-      }}>
+      <div
+        className="sticky-notes-grid-responsive"
+      >
         {notes.map((note) => (
           <StickyNoteCard
             key={note.id}

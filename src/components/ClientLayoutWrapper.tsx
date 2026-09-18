@@ -36,7 +36,7 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
       />
       <Navigation />
 
-      <main style={{ flex: 1, padding: '1.5rem', maxWidth: '1440px', width: '100%', margin: '0 auto' }}>
+      <main className="main-content-area">
         {children}
       </main>
 

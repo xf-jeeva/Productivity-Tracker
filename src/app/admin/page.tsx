@@ -528,6 +528,7 @@ export default function AdminDashboardPage() {
         }}
       >
         <div
+          className="masthead-responsive"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -584,7 +585,7 @@ export default function AdminDashboardPage() {
           </div>
 
           {/* Action Bar */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+          <div className="masthead-actions-responsive" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
             <Link
               href="/"
               className="btn-parchment"
@@ -610,12 +611,7 @@ export default function AdminDashboardPage() {
 
       {/* ── Global Metrics Bar ───────────────────────────────────────────── */}
       <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '1rem',
-          marginBottom: '1.5rem',
-        }}
+        className="metrics-grid-responsive"
       >
         {/* Total Personnel */}
         <div className="vintage-paper" style={{ padding: '1rem', borderLeft: '4px solid var(--brass-gold)', backgroundColor: 'var(--bg-card)' }}>
@@ -699,7 +695,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* ── Main Two-Column Layout: Staff Selector + Personnel Dossier Watcher ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 340px) 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
+      <div className="admin-two-col-layout">
         
         {/* ── LEFT COLUMN: Personnel Selector ────────────────────────────── */}
         <div

@@ -479,3 +479,220 @@ body {
   animation: brassGlowPulse 1.2s ease-out;
 }
 
+/* ==========================================================================
+   MOBILE RESPONSIVE SYSTEM & HAMBURGER ADAPTATIONS
+   ========================================================================== */
+
+/* Drawer slide-in animation */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0.5;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInBackdrop {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Default desktop states */
+.mobile-hamburger-btn {
+  display: none !important;
+}
+
+.desktop-header-actions {
+  display: flex !important;
+}
+
+.desktop-nav-strip {
+  display: block;
+}
+
+.desktop-top-strip {
+  display: flex !important;
+}
+
+.main-content-area {
+  flex: 1;
+  padding: 1.5rem;
+  max-width: 1440px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* Desk 2-column grid for Daily Tasks & Daily Routines */
+.desk-sections-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 1.5rem;
+  align-items: start;
+  margin-bottom: 1.5rem;
+}
+
+/* Admin 2-column grid for Staff Selector & Dossier Watcher */
+.admin-two-col-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) 1fr;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+/* Metrics grid default */
+.metrics-grid-responsive {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Sticky notes grid default */
+.sticky-notes-grid-responsive {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 1rem;
+}
+
+/* Tablet & Mobile Breakpoint (<= 860px) */
+@media (max-width: 860px) {
+  .mobile-hamburger-btn {
+    display: inline-flex !important;
+  }
+
+  .desktop-header-actions {
+    display: none !important;
+  }
+
+  .desktop-nav-strip {
+    display: none !important;
+  }
+
+  .desktop-top-strip {
+    display: none !important;
+  }
+
+  .main-content-area {
+    padding: 0.85rem !important;
+  }
+
+  .desk-sections-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1.25rem !important;
+  }
+
+  .admin-two-col-layout {
+    grid-template-columns: 1fr !important;
+    gap: 1.25rem !important;
+  }
+
+  .metrics-grid-responsive {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.65rem !important;
+  }
+
+  .sticky-notes-grid-responsive {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important;
+    gap: 0.65rem !important;
+  }
+
+  /* Header brand adjustments */
+  .brand-title-text {
+    font-size: 1.25rem !important;
+  }
+
+  .brand-sub-text {
+    font-size: 0.62rem !important;
+    letter-spacing: 0.04em !important;
+  }
+
+  /* Masthead adjustments */
+  .masthead-responsive {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 1rem !important;
+    padding: 1rem !important;
+  }
+
+  .masthead-actions-responsive {
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+  }
+
+  .masthead-actions-responsive button,
+  .masthead-actions-responsive a {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  /* View selection tabs scrollable on mobile */
+  .view-tabs-scroll-responsive {
+    width: 100% !important;
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    padding-bottom: 0.25rem !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .view-tabs-scroll-responsive button {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+  }
+
+  .search-input-responsive {
+    width: 100% !important;
+  }
+
+  /* Modals on mobile */
+  .modal-overlay-responsive {
+    padding: 0.5rem !important;
+  }
+
+  .modal-card-responsive {
+    padding: 1.1rem !important;
+    max-height: 94vh !important;
+  }
+
+  /* Notification toasts full width on small screens */
+  .notification-toast-container {
+    left: 0.75rem !important;
+    right: 0.75rem !important;
+    bottom: 0.75rem !important;
+    max-width: calc(100% - 1.5rem) !important;
+    width: auto !important;
+  }
+}
+
+/* Small phone optimizations (<= 480px) */
+@media (max-width: 480px) {
+  .main-content-area {
+    padding: 0.5rem !important;
+  }
+
+  .metrics-grid-responsive {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.5rem !important;
+  }
+
+  .metrics-grid-responsive .vintage-paper {
+    padding: 0.75rem !important;
+  }
+
+  .metrics-grid-responsive .serif-display {
+    font-size: 1.45rem !important;
+  }
+
+  .sticky-notes-grid-responsive {
+    grid-template-columns: 1fr !important;
+  }
+}
+

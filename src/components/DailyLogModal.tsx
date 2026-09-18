@@ -66,6 +66,7 @@ export default function DailyLogModal({ isOpen, onClose }: DailyLogModalProps) {
 
   return (
     <div
+      className="modal-overlay-responsive"
       style={{
         position: 'fixed',
         inset: 0,
@@ -80,7 +81,7 @@ export default function DailyLogModal({ isOpen, onClose }: DailyLogModalProps) {
       onClick={onClose}
     >
       <div
-        className="vintage-paper"
+        className="vintage-paper modal-card-responsive"
         style={{
           width: '100%',
           maxWidth: '650px',
