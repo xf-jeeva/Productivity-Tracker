@@ -707,15 +707,24 @@ export function recordTokenTransaction(data: {
   return newTx;
 }
 
-export function getUserTokens(username: string): {
+export function getUserTokens(username?: string | null): {
   balance: number;
   totalEarned: number;
   totalRedeemed: number;
   rupeeWorth: number;
 } {
+  if (!username) {
+    return {
+      balance: 0,
+      totalEarned: 0,
+      totalRedeemed: 0,
+      rupeeWorth: 0,
+    };
+  }
+
   const transactions = getTokenTransactions();
   const lowerUser = username.toLowerCase().trim();
-  const userTxs = transactions.filter((t) => t.username.toLowerCase() === lowerUser);
+  const userTxs = transactions.filter((t) => t.username && t.username.toLowerCase() === lowerUser);
 
   let balance = 0;
   let totalEarned = 0;
