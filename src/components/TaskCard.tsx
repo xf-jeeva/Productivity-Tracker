@@ -12,6 +12,7 @@ import {
   getUserByUsername 
 } from '../lib/storage';
 import { playRubberStampSound, playVintageBell, playTypewriterClick, playCoinClink } from '../lib/sound';
+import { useAuth } from './AuthProvider';
 import RubberStamp from './RubberStamp';
 import confetti from 'canvas-confetti';
 import { 
@@ -40,13 +41,18 @@ interface TaskCardProps {
 }
 
 export default function TaskCard({ task, onEdit, showAssignee = true }: TaskCardProps) {
+  const { user: authUser } = useAuth();
   const [justStamped, setJustStamped] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [adminNoteInput, setAdminNoteInput] = useState(task.adminNotes || '');
   const [isSigning, setIsSigning] = useState(false);
 
   const currentUser = getCurrentUser();
-  const isAdmin = currentUser?.role === 'admin';
+  const effectiveUsername = authUser?.email
+    ? authUser.email.split('@')[0]
+    : (currentUser?.username || authUser?.name || 'user');
+
+  const isAdmin = authUser?.role === 'admin' || currentUser?.role === 'admin';
   const isDeleted = task.status === 'deleted';
 
   const totalSubtasks = task.subtasks.length;
@@ -85,14 +91,14 @@ export default function TaskCard({ task, onEdit, showAssignee = true }: TaskCard
       playTypewriterClick();
     }
 
-    markTaskComplete(task.id, currentUser?.username || 'user');
+    markTaskComplete(task.id, effectiveUsername);
   };
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (confirm(`Move Dispatch Order № ${task.orderNumber} to Deleted archive?`)) {
       playTypewriterClick();
-      deleteTask(task.id, currentUser?.username || 'user');
+      deleteTask(task.id, effectiveUsername);
     }
   };
 

@@ -103,10 +103,33 @@ export default function MyDeskPage() {
     localStorage.setItem(`bureau_desk_notes_${currentUser?.id ?? 'guest'}`, val);
   };
 
-  // Filter tasks belonging to current user (by user ID)
+  // Filter tasks belonging to current user (matching ID, email, username, or name)
   const myItems = tasks.filter((t) => {
     if (!currentUser) return false;
-    return t.assigneeId === currentUser.id || t.createdById === currentUser.id;
+    const uid = currentUser.id?.toLowerCase();
+    const uemail = currentUser.email?.toLowerCase();
+    const uname = currentUser.name?.toLowerCase();
+    const uhandle = uemail?.split('@')[0]?.toLowerCase();
+
+    const tAssignee = t.assigneeId?.toLowerCase();
+    const tCreator = t.createdById?.toLowerCase();
+    const tUsername = t.createdByUsername?.toLowerCase();
+
+    // Direct ID match
+    if (uid && (tAssignee === uid || tCreator === uid)) return true;
+    // Email match
+    if (uemail && (tAssignee === uemail || tCreator === uemail || tUsername === uemail)) return true;
+    // Handle match
+    if (uhandle && (tAssignee === uhandle || tCreator === uhandle || tUsername === uhandle)) return true;
+    // Name match
+    if (uname && (tAssignee === uname || tCreator === uname || tUsername === uname)) return true;
+
+    // Fallback for default local tasks
+    if ((!t.assigneeId || t.assigneeId === 'usr-default') && (!t.createdById || t.createdById === 'usr-default')) {
+      return true;
+    }
+
+    return false;
   });
 
   // 1. Daily Tasks (active)

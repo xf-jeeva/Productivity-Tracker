@@ -306,13 +306,20 @@ export function createTask(taskData: {
   estimatedHours?: number;
   dueDate?: string;
   subtasks?: { id: string; title: string; completed: boolean }[];
+  assigneeId?: string;
+  createdById?: string;
+  createdByUsername?: string;
 }): Task {
-  const current = getCurrentUser() || INITIAL_USERS[0];
+  const current = getCurrentUser();
   const tasks = getTasks();
   const maxOrder = tasks.reduce((max, t) => Math.max(max, t.orderNumber || 1000), 1047);
 
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const finalAssigneeId = taskData.assigneeId || current?.id || 'usr-default';
+  const finalCreatedById = taskData.createdById || current?.id || finalAssigneeId;
+  const finalUsername = taskData.createdByUsername || current?.username || (current?.email ? current.email.split('@')[0] : 'user');
 
   const newTask: Task = {
     id: `tsk-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -321,9 +328,9 @@ export function createTask(taskData: {
     reminderTime: taskData.reminderTime || '',
     title: taskData.title.trim(),
     description: taskData.description?.trim() || '',
-    assigneeId: current.id,
-    createdById: current.id,
-    createdByUsername: current.username,
+    assigneeId: finalAssigneeId,
+    createdById: finalCreatedById,
+    createdByUsername: finalUsername,
     priority: taskData.priority || 'routine',
     status: 'pending',
     category: taskData.category || 'Atelier & Craft',
@@ -374,6 +381,9 @@ export function toggleSubTask(taskId: string, subtaskId: string): void {
   if (isBrowser) {
     localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
   }
+  if (isSupabaseConfigured) {
+    pushCloudTask(task).catch(() => {});
+  }
   emitSync();
 }
 
@@ -420,8 +430,13 @@ export function markTaskComplete(taskId: string, completedByUsername?: string): 
     if (isBrowser) {
       localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
     }
-    emitSync();
   }
+
+  // Push updated status to Supabase cloud table immediately so refresh never reverts it
+  if (isSupabaseConfigured) {
+    pushCloudTask(tasks[index]).catch((err) => console.warn('[Supabase] markTaskComplete sync error:', err));
+  }
+  emitSync();
 
   return tasks[index];
 }
@@ -471,6 +486,9 @@ export function restoreTask(taskId: string): boolean {
   if (isBrowser) {
     localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
   }
+  if (isSupabaseConfigured) {
+    pushCloudTask(tasks[index]).catch(() => {});
+  }
   emitSync();
   return true;
 }
@@ -507,6 +525,9 @@ export function adminSignOff(taskId: string, adminUser: User, notes?: string): T
 
   if (isBrowser) {
     localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
+  }
+  if (isSupabaseConfigured) {
+    pushCloudTask(tasks[index]).catch(() => {});
   }
   emitSync();
   return tasks[index];

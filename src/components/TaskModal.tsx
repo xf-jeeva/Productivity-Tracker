@@ -76,7 +76,7 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
       setSubtasks([]);
     }
     setNewSubtaskTitle('');
-  }, [isOpen, taskToEdit, defaultType]);
+  }, [isOpen, taskToEdit, defaultType, authUser]);
 
   if (!isOpen) return null;
 
@@ -116,8 +116,15 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
         estimatedHours: Number(estimatedHours),
         dueDate,
         subtasks,
+        assigneeId: assigneeId || taskToEdit.assigneeId,
       });
     } else {
+      const current = getCurrentUser();
+      const effectiveUid = authUser?.id || current?.id || 'usr-default';
+      const effectiveUsername = authUser?.email
+        ? authUser.email.split('@')[0]
+        : (current?.username || authUser?.name || 'user');
+
       createTask({
         title: title.trim(),
         description: description.trim(),
@@ -128,6 +135,9 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
         estimatedHours: Number(estimatedHours),
         dueDate,
         subtasks,
+        assigneeId: assigneeId || effectiveUid,
+        createdById: effectiveUid,
+        createdByUsername: effectiveUsername,
       });
     }
 

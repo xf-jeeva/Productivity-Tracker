@@ -110,16 +110,41 @@ function taskToRow(t: Task) {
   };
 }
 
-// ── Fetch all tasks for a specific user ───────────────────────────────────
-export async function fetchCloudTasksForUser(userId: string): Promise<Task[] | null> {
+// ── Fetch all tasks for a specific user (by ID, email, or username) ────────
+export async function fetchCloudTasksForUser(
+  userId: string,
+  userEmail?: string,
+  userName?: string
+): Promise<Task[] | null> {
   if (!isSupabaseConfigured || !supabase) return null;
   try {
+    const orClauses: string[] = [
+      `assignee_id.eq.${userId}`,
+      `created_by_id.eq.${userId}`,
+    ];
+    if (userEmail) {
+      orClauses.push(`assignee_id.eq.${userEmail}`);
+      orClauses.push(`created_by_id.eq.${userEmail}`);
+      const handle = userEmail.split('@')[0];
+      if (handle) {
+        orClauses.push(`created_by_username.eq.${handle}`);
+        orClauses.push(`assignee_id.eq.${handle}`);
+      }
+    }
+    if (userName) {
+      orClauses.push(`created_by_username.eq.${userName}`);
+    }
+
     const { data, error } = await supabase
       .from(TABLE)
       .select('*')
-      .or(`assignee_id.eq.${userId},created_by_id.eq.${userId}`)
+      .or(orClauses.join(','))
       .order('order_number', { ascending: false });
-    if (error) { console.warn('[Supabase] fetchCloudTasksForUser:', error.message); return null; }
+
+    if (error) {
+      console.warn('[Supabase] fetchCloudTasksForUser:', error.message);
+      return null;
+    }
     return (data ?? []).map(rowToTask);
   } catch (e) {
     console.warn('[Supabase] fetchCloudTasksForUser failed', e);
@@ -168,22 +193,51 @@ export async function deleteCloudTask(taskId: string): Promise<void> {
 // ── Real-time subscription for a user's tasks ─────────────────────────────
 export function subscribeCloudTasks(
   userId: string,
-  callback: (tasks: Task[]) => void
+  callback: (tasks: Task[]) => void,
+  userEmail?: string,
+  userName?: string
 ): (() => void) | null {
   if (!isSupabaseConfigured || !supabase) return null;
 
   // Initial fetch
-  fetchCloudTasksForUser(userId).then((tasks) => { if (tasks) callback(tasks); });
+  fetchCloudTasksForUser(userId, userEmail, userName).then((tasks) => {
+    if (tasks) callback(tasks);
+  });
 
   const channel = supabase
     .channel(`bureau_tasks_${userId}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, async () => {
-      const tasks = await fetchCloudTasksForUser(userId);
+      const tasks = await fetchCloudTasksForUser(userId, userEmail, userName);
       if (tasks) callback(tasks);
     })
     .subscribe();
 
-  return () => { supabase?.removeChannel(channel); };
+  return () => {
+    supabase?.removeChannel(channel);
+  };
+}
+
+// ── Real-time subscription for ALL bureau tasks (admin) ───────────────────
+export function subscribeAllCloudTasks(
+  callback: (tasks: Task[]) => void
+): (() => void) | null {
+  if (!isSupabaseConfigured || !supabase) return null;
+
+  fetchAllCloudTasks().then((tasks) => {
+    if (tasks) callback(tasks);
+  });
+
+  const channel = supabase
+    .channel('bureau_all_tasks')
+    .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, async () => {
+      const tasks = await fetchAllCloudTasks();
+      if (tasks) callback(tasks);
+    })
+    .subscribe();
+
+  return () => {
+    supabase?.removeChannel(channel);
+  };
 }
 
 export { isSupabaseConfigured };

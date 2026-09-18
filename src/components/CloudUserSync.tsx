@@ -10,15 +10,20 @@
 
 import { useEffect } from 'react';
 import { subscribeCloudUsers, pushCloudUsers, isSupabaseConfigured } from '../lib/cloudUsers';
-import { subscribeCloudTasks } from '../lib/cloudTasks';
+import { subscribeCloudTasks, subscribeAllCloudTasks, pushCloudTask } from '../lib/cloudTasks';
 import { subscribeCloudNotes } from '../lib/cloudNotes';
 import { getUsers, getCurrentUser, BUREAU_SYNC_EVENT } from '../lib/storage';
+import { isMasterAdmin } from '../lib/auth';
+import { useAuth } from './AuthProvider';
+import { Task } from '../types';
 
 const USERS_KEY        = 'daily_bureau_users_v3';
 const TASKS_KEY        = 'daily_bureau_tasks_v3';
 const STICKY_NOTES_KEY = 'daily_bureau_sticky_notes_v3';
 
 export default function CloudUserSync() {
+  const { user: authUser } = useAuth();
+
   useEffect(() => {
     if (!isSupabaseConfigured) return;
 
@@ -34,10 +39,10 @@ export default function CloudUserSync() {
         return;
       }
 
-      // Merge: cloud users take precedence, keep any local-only users too
+      // Merge: cloud users take precedence, exclude mock admin
       const cloudIds = new Set(cloudUsers.map((u) => u.id));
-      const localOnly = localUsers.filter((u) => !cloudIds.has(u.id));
-      const merged = [...cloudUsers, ...localOnly];
+      const localOnly = localUsers.filter((u) => !cloudIds.has(u.id) && u.id !== 'usr-admin');
+      const merged = [...cloudUsers.filter((u) => u.id !== 'usr-admin'), ...localOnly];
 
       try {
         localStorage.setItem(USERS_KEY, JSON.stringify(merged));
@@ -47,37 +52,75 @@ export default function CloudUserSync() {
       }
     });
 
-    // ── 2. Tasks sync (for current logged-in user) ───────────────────────────
+    // ── 2. Tasks sync (for current logged-in user or master admin) ────────────
     const currentUser = getCurrentUser();
+    const activeUserId = authUser?.id || currentUser?.id;
+    const activeEmail = authUser?.email || currentUser?.email;
+    const activeName = authUser?.name || currentUser?.name;
+    const isAdmin = isMasterAdmin(activeEmail);
+
     let unsubscribeTasks: (() => void) | null = null;
     let unsubscribeNotes: (() => void) | null = null;
 
-    if (currentUser) {
-      unsubscribeTasks = subscribeCloudTasks(currentUser.id, (cloudTasks) => {
-        try {
-          // Merge cloud tasks over local — cloud is source of truth
-          const stored = localStorage.getItem(TASKS_KEY);
-          const localTasks = stored ? JSON.parse(stored) : [];
-          const cloudIds = new Set(cloudTasks.map((t) => t.id));
-          // Keep local-only tasks not yet pushed (optimistic UI)
-          const localOnly = localTasks.filter((t: { id: string }) => !cloudIds.has(t.id));
-          const merged = [...cloudTasks, ...localOnly];
-          localStorage.setItem(TASKS_KEY, JSON.stringify(merged));
-          window.dispatchEvent(new Event(BUREAU_SYNC_EVENT));
-        } catch {
-          // Storage quota exceeded — ignore
-        }
-      });
+    const handleTasksSync = (cloudTasks: Task[]) => {
+      try {
+        const stored = localStorage.getItem(TASKS_KEY);
+        const localTasks: Task[] = stored ? JSON.parse(stored) : [];
 
+        const mergedMap = new Map<string, Task>();
+
+        // Cloud tasks are base
+        for (const ct of cloudTasks) {
+          mergedMap.set(ct.id, ct);
+        }
+
+        // Smart merge with local tasks: ensure completed tasks are NEVER reverted to pending
+        for (const lt of localTasks) {
+          if (!mergedMap.has(lt.id)) {
+            // Task exists only locally -> keep it and upload to cloud
+            mergedMap.set(lt.id, lt);
+            pushCloudTask(lt).catch(() => {});
+          } else {
+            const ct = mergedMap.get(lt.id)!;
+            // If local task was stamped completed and cloud hasn't recorded it yet
+            if (lt.status === 'completed' && ct.status !== 'completed') {
+              mergedMap.set(lt.id, lt);
+              pushCloudTask(lt).catch(() => {});
+            } else if (lt.status === 'deleted' && ct.status !== 'deleted') {
+              mergedMap.set(lt.id, lt);
+              pushCloudTask(lt).catch(() => {});
+            }
+          }
+        }
+
+        const merged = Array.from(mergedMap.values()).sort(
+          (a, b) => (b.orderNumber || 0) - (a.orderNumber || 0)
+        );
+        localStorage.setItem(TASKS_KEY, JSON.stringify(merged));
+        window.dispatchEvent(new Event(BUREAU_SYNC_EVENT));
+      } catch {
+        // Storage quota exceeded — ignore
+      }
+    };
+
+    if (isAdmin) {
+      // Chief Administrator receives all tasks across the Bureau in real time
+      unsubscribeTasks = subscribeAllCloudTasks(handleTasksSync);
+    } else if (activeUserId) {
+      // Field operative receives all their own tasks (by ID, email, or username)
+      unsubscribeTasks = subscribeCloudTasks(activeUserId, handleTasksSync, activeEmail, activeName);
+    }
+
+    if (activeUserId) {
       // ── 3. Sticky notes sync ────────────────────────────────────────────────
-      unsubscribeNotes = subscribeCloudNotes(currentUser.id, (cloudNotes) => {
+      unsubscribeNotes = subscribeCloudNotes(activeUserId, (cloudNotes) => {
         try {
           const stored = localStorage.getItem(STICKY_NOTES_KEY);
           const localNotes = stored ? JSON.parse(stored) : [];
           const cloudIds = new Set(cloudNotes.map((n) => n.id));
           const localOnly = localNotes.filter(
             (n: { id: string; userId: string }) =>
-              !cloudIds.has(n.id) && n.userId === currentUser.id
+              !cloudIds.has(n.id) && n.userId === activeUserId
           );
           const merged = [...cloudNotes, ...localOnly];
           localStorage.setItem(STICKY_NOTES_KEY, JSON.stringify(merged));
@@ -93,7 +136,7 @@ export default function CloudUserSync() {
       if (unsubscribeTasks) unsubscribeTasks();
       if (unsubscribeNotes) unsubscribeNotes();
     };
-  }, []);
+  }, [authUser?.id, authUser?.email]);
 
   return null;
 }

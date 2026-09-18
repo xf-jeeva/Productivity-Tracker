@@ -10,6 +10,8 @@ import {
   deleteTask,
   restoreTask,
   updateTask,
+  markTaskComplete,
+  adminSignOff,
   BUREAU_SYNC_EVENT,
   getRewardClaims,
   updateRewardClaimStatus,
@@ -69,8 +71,8 @@ export default function AdminDashboardPage() {
   const [rewardClaims, setRewardClaims] = useState<RewardClaim[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
-  // User inspection view: 'tasks' | 'routines' | 'notes'
-  const [userTab, setUserTab] = useState<'tasks' | 'routines' | 'notes'>('tasks');
+  // User inspection view: 'tasks' | 'routines' | 'completed' | 'notes'
+  const [userTab, setUserTab] = useState<'tasks' | 'routines' | 'completed' | 'notes'>('tasks');
   const [inspectNotes, setInspectNotes] = useState<string>('');
   const [inspectStickyNotes, setInspectStickyNotes] = useState<StickyNote[]>([]);
   const [isLoadingNotes, setIsLoadingNotes] = useState<boolean>(false);
@@ -146,9 +148,27 @@ export default function AdminDashboardPage() {
       }
 
       if (cloudTasks && cloudTasks.length > 0) {
-        const cloudIds = new Set(cloudTasks.map((t) => t.id));
-        const localOnly = getTasks().filter((t) => !cloudIds.has(t.id));
-        setTasks([...cloudTasks, ...localOnly]);
+        const localTasks = getTasks();
+        const mergedMap = new Map<string, Task>();
+        for (const ct of cloudTasks) {
+          mergedMap.set(ct.id, ct);
+        }
+        for (const lt of localTasks) {
+          if (!mergedMap.has(lt.id)) {
+            mergedMap.set(lt.id, lt);
+          } else {
+            const ct = mergedMap.get(lt.id)!;
+            if (lt.status === 'completed' && ct.status !== 'completed') {
+              mergedMap.set(lt.id, lt);
+            } else if (lt.status === 'deleted' && ct.status !== 'deleted') {
+              mergedMap.set(lt.id, lt);
+            }
+          }
+        }
+        const mergedTasks = Array.from(mergedMap.values()).sort(
+          (a, b) => (b.orderNumber || 0) - (a.orderNumber || 0)
+        );
+        setTasks(mergedTasks);
       }
     } catch (err) {
       console.warn('Admin cloud sync note:', err);
@@ -372,19 +392,44 @@ export default function AdminDashboardPage() {
   // 2. UNLOCKED EXECUTIVE ADMIN DASHBOARD
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // Filter tasks for selected user in the inspector
+  // Filter tasks for selected user in the inspector (comprehensive matching)
   const userItems = selectedUser
-    ? tasks.filter((t) => t.assigneeId === selectedUser.id || t.createdById === selectedUser.id)
+    ? tasks.filter((t) => {
+        const uid = selectedUser.id?.toLowerCase();
+        const uemail = selectedUser.email?.toLowerCase();
+        const uname = selectedUser.name?.toLowerCase();
+        const uusername = selectedUser.username?.toLowerCase();
+        const uhandle = uemail?.split('@')[0]?.toLowerCase();
+
+        const tAssignee = t.assigneeId?.toLowerCase();
+        const tCreator = t.createdById?.toLowerCase();
+        const tUsername = t.createdByUsername?.toLowerCase();
+
+        if (uid && (tAssignee === uid || tCreator === uid)) return true;
+        if (uemail && (tAssignee === uemail || tCreator === uemail || tUsername === uemail)) return true;
+        if (uusername && (tAssignee === uusername || tCreator === uusername || tUsername === uusername)) return true;
+        if (uhandle && (tAssignee === uhandle || tCreator === uhandle || tUsername === uhandle)) return true;
+        if (uname && (tAssignee === uname || tCreator === uname || tUsername === uname)) return true;
+
+        if ((!t.assigneeId || t.assigneeId === 'usr-default') && (!t.createdById || t.createdById === 'usr-default') && users[0]?.id === selectedUser.id) {
+          return true;
+        }
+
+        return false;
+      })
     : [];
 
-  const userTasksOnly = userItems.filter((t) => (t.itemType || 'task') === 'task');
-  const userRoutinesOnly = userItems.filter((t) => t.itemType === 'routine');
+  const userTasksOnly = userItems.filter((t) => (t.itemType || 'task') === 'task' && t.status !== 'deleted');
+  const userRoutinesOnly = userItems.filter((t) => t.itemType === 'routine' && t.status !== 'deleted');
 
   const userPendingTasks = userTasksOnly.filter((t) => t.status === 'pending' || t.status === 'in-progress');
   const userCompletedTasks = userTasksOnly.filter((t) => t.status === 'completed');
+  const userCompletedRoutines = userRoutinesOnly.filter((t) => t.status === 'completed');
+  const userCompletedAll = userItems.filter((t) => t.status === 'completed');
 
-  const userCompletionRate = userTasksOnly.length > 0
-    ? Math.round((userCompletedTasks.length / userTasksOnly.length) * 100)
+  const nonDeletedItems = userItems.filter((t) => t.status !== 'deleted');
+  const userCompletionRate = nonDeletedItems.length > 0
+    ? Math.round((userCompletedAll.length / nonDeletedItems.length) * 100)
     : 0;
 
   // Global Ledger Filtering
@@ -405,11 +450,12 @@ export default function AdminDashboardPage() {
     return true;
   });
 
-  const totalAllTasks = tasks.filter((t) => (t.itemType || 'task') === 'task');
-  const totalAllCompleted = totalAllTasks.filter((t) => t.status === 'completed');
-  const totalAllRoutines = tasks.filter((t) => t.itemType === 'routine');
-  const globalCompletionRate = totalAllTasks.length > 0
-    ? Math.round((totalAllCompleted.length / totalAllTasks.length) * 100)
+  const totalAllTasks = tasks.filter((t) => (t.itemType || 'task') === 'task' && t.status !== 'deleted');
+  const totalAllCompleted = tasks.filter((t) => t.status === 'completed');
+  const totalAllRoutines = tasks.filter((t) => t.itemType === 'routine' && t.status !== 'deleted');
+  const totalNonDeleted = tasks.filter((t) => t.status !== 'deleted');
+  const globalCompletionRate = totalNonDeleted.length > 0
+    ? Math.round((totalAllCompleted.length / totalNonDeleted.length) * 100)
     : 0;
 
   const pendingClaims = rewardClaims.filter((c) => c.status === 'pending');
@@ -626,8 +672,31 @@ export default function AdminDashboardPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '600px', overflowY: 'auto' }}>
             {users.map((u) => {
               const isSelected = selectedUser?.id === u.id;
-              const userTasks = tasks.filter((t) => t.assigneeId === u.id || t.createdById === u.id);
+              const userTasks = tasks.filter((t) => {
+                const uid = u.id?.toLowerCase();
+                const uemail = u.email?.toLowerCase();
+                const uname = u.name?.toLowerCase();
+                const uusername = u.username?.toLowerCase();
+                const uhandle = uemail?.split('@')[0]?.toLowerCase();
+
+                const tAssignee = t.assigneeId?.toLowerCase();
+                const tCreator = t.createdById?.toLowerCase();
+                const tUsername = t.createdByUsername?.toLowerCase();
+
+                if (uid && (tAssignee === uid || tCreator === uid)) return true;
+                if (uemail && (tAssignee === uemail || tCreator === uemail || tUsername === uemail)) return true;
+                if (uusername && (tAssignee === uusername || tCreator === uusername || tUsername === uusername)) return true;
+                if (uhandle && (tAssignee === uhandle || tCreator === uhandle || tUsername === uhandle)) return true;
+                if (uname && (tAssignee === uname || tCreator === uname || tUsername === uname)) return true;
+
+                if ((!t.assigneeId || t.assigneeId === 'usr-default') && (!t.createdById || t.createdById === 'usr-default') && users[0]?.id === u.id) {
+                  return true;
+                }
+
+                return false;
+              });
               const pendingCount = userTasks.filter((t) => t.status === 'pending' || t.status === 'in-progress').length;
+              const completedCount = userTasks.filter((t) => t.status === 'completed').length;
 
               return (
                 <button
@@ -690,6 +759,11 @@ export default function AdminDashboardPage() {
                     {pendingCount > 0 && (
                       <span style={{ fontSize: '0.65rem', color: 'var(--stamp-red)', fontWeight: 700 }}>
                         {pendingCount} pending
+                      </span>
+                    )}
+                    {completedCount > 0 && (
+                      <span style={{ fontSize: '0.65rem', color: 'var(--stamp-green)', fontWeight: 700 }}>
+                        {completedCount} completed
                       </span>
                     )}
                   </div>
@@ -776,7 +850,7 @@ export default function AdminDashboardPage() {
                     Task Clearance Velocity
                   </div>
                   <div style={{ fontSize: '1.25rem', fontWeight: 800, color: userCompletionRate > 60 ? 'var(--stamp-green)' : 'var(--ink-primary)' }}>
-                    {userCompletionRate}% <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--ink-muted)' }}>({userCompletedTasks.length}/{userTasksOnly.length})</span>
+                    {userCompletionRate}% <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--ink-muted)' }}>({userCompletedAll.length}/{nonDeletedItems.length})</span>
                   </div>
                 </div>
               </div>
@@ -788,6 +862,7 @@ export default function AdminDashboardPage() {
                   gap: '0.5rem',
                   borderBottom: '2px solid var(--border-sepia)',
                   marginBottom: '1.25rem',
+                  flexWrap: 'wrap',
                 }}
               >
                 <button
@@ -841,6 +916,30 @@ export default function AdminDashboardPage() {
                 >
                   <Repeat size={15} style={{ color: '#8b5cf6' }} />
                   <span>Daily Routines ({userRoutinesOnly.length})</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    playTypewriterClick();
+                    setUserTab('completed');
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    padding: '0.5rem 1rem',
+                    fontSize: '0.82rem',
+                    fontWeight: userTab === 'completed' ? 700 : 500,
+                    color: userTab === 'completed' ? 'var(--ink-primary)' : 'var(--ink-secondary)',
+                    backgroundColor: userTab === 'completed' ? 'var(--bg-parchment)' : 'transparent',
+                    border: 'none',
+                    borderBottom: userTab === 'completed' ? '3px solid var(--stamp-green)' : '3px solid transparent',
+                    cursor: 'pointer',
+                    borderRadius: '4px 4px 0 0',
+                  }}
+                >
+                  <CheckCircle2 size={15} style={{ color: 'var(--stamp-green)' }} />
+                  <span>Completed Archive ({userCompletedAll.length})</span>
                 </button>
 
                 <button
@@ -1045,7 +1144,150 @@ export default function AdminDashboardPage() {
                 </div>
               )}
 
-              {/* ── TAB 3: User Desk Notes & Memos ── */}
+              {/* ── TAB 3: Completed Archive ── */}
+              {userTab === 'completed' && (
+                <div>
+                  {userCompletedAll.length === 0 ? (
+                    <div style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--ink-muted)' }}>
+                      <CheckCircle2 size={36} style={{ margin: '0 auto 0.75rem', opacity: 0.5, color: 'var(--stamp-green)' }} />
+                      <p style={{ fontSize: '0.85rem' }}>No completed tasks or routines logged for this officer yet.</p>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {userCompletedAll.map((item) => (
+                        <div
+                          key={item.id}
+                          style={{
+                            padding: '0.85rem 1rem',
+                            backgroundColor: 'var(--bg-parchment)',
+                            border: '1px solid var(--border-sepia)',
+                            borderLeft: '4px solid var(--stamp-green)',
+                            borderRadius: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                            gap: '0.75rem',
+                          }}
+                        >
+                          <div style={{ minWidth: '220px', flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem', flexWrap: 'wrap' }}>
+                              <span className="typewriter-text" style={{ fontSize: '0.68rem', color: 'var(--brass-dark)', fontWeight: 700 }}>
+                                #{item.orderNumber}
+                              </span>
+                              <span
+                                className="typewriter-text"
+                                style={{
+                                  fontSize: '0.62rem',
+                                  padding: '0.1rem 0.4rem',
+                                  borderRadius: '2px',
+                                  backgroundColor: item.itemType === 'routine' ? '#f3e8ff' : 'var(--stamp-blue-bg)',
+                                  color: item.itemType === 'routine' ? '#7c3aed' : 'var(--stamp-blue)',
+                                  fontWeight: 700,
+                                  textTransform: 'uppercase',
+                                }}
+                              >
+                                {item.itemType === 'routine' ? 'ROUTINE' : 'TASK'}
+                              </span>
+                              <span
+                                className="typewriter-text"
+                                style={{
+                                  fontSize: '0.62rem',
+                                  padding: '0.1rem 0.4rem',
+                                  borderRadius: '2px',
+                                  backgroundColor: 'var(--stamp-green-bg)',
+                                  color: 'var(--stamp-green)',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                COMPLETED
+                              </span>
+                              {item.adminSignedOff && (
+                                <span
+                                  className="typewriter-text"
+                                  style={{
+                                    fontSize: '0.62rem',
+                                    padding: '0.1rem 0.4rem',
+                                    borderRadius: '2px',
+                                    backgroundColor: 'var(--stamp-red-bg)',
+                                    color: 'var(--stamp-red)',
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  ★ CHIEF VERIFIED
+                                </span>
+                              )}
+                              <span
+                                style={{
+                                  fontSize: '0.65rem',
+                                  padding: '0.1rem 0.35rem',
+                                  borderRadius: '2px',
+                                  backgroundColor: 'var(--brass-glow)',
+                                  color: 'var(--brass-dark)',
+                                  fontWeight: 700,
+                                  fontFamily: 'var(--font-mono)',
+                                }}
+                              >
+                                🪙 +{item.tokensEarned || (item.priority === 'opus' ? 2 : 1)} Tokens
+                              </span>
+                            </div>
+
+                            <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--ink-primary)', textDecoration: 'line-through' }}>
+                              {item.title}
+                            </div>
+
+                            {item.description && (
+                              <div style={{ fontSize: '0.78rem', color: 'var(--ink-secondary)', marginTop: '0.2rem' }}>
+                                {item.description}
+                              </div>
+                            )}
+
+                            <div style={{ fontSize: '0.72rem', color: 'var(--ink-muted)', marginTop: '0.35rem' }}>
+                              {item.completedAt && (
+                                <span>Completed: {new Date(item.completedAt).toLocaleString()} • </span>
+                              )}
+                              <span>Officer: @{item.completedBy || selectedUser.name}</span>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            {!item.adminSignedOff ? (
+                              <button
+                                onClick={() => handleAdminSignOff(item)}
+                                className="btn-parchment"
+                                style={{ padding: '0.35rem 0.65rem', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                                title="Admin Sign-Off on this completed order"
+                              >
+                                <Stamp size={13} style={{ color: 'var(--stamp-red)' }} />
+                                <span>Chief Sign-Off</span>
+                              </button>
+                            ) : (
+                              <span className="typewriter-text" style={{ fontSize: '0.7rem', color: 'var(--stamp-red)', fontWeight: 700 }}>
+                                Signed by {item.adminSignedBy || 'Chief Admin'}
+                              </span>
+                            )}
+
+                            <button
+                              onClick={() => {
+                                playTypewriterClick();
+                                markTaskComplete(item.id, selectedUser.username);
+                                syncData();
+                              }}
+                              className="btn-parchment"
+                              style={{ padding: '0.35rem 0.65rem', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                              title="Reopen order to pending"
+                            >
+                              <span>Reopen</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── TAB 4: User Desk Notes & Memos ── */}
               {userTab === 'notes' && (
                 <div>
                   {isLoadingNotes ? (
