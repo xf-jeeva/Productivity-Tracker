@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Task, User, TaskPriority, ItemType } from '../types';
 import { getUsers, getCurrentUser, createTask, updateTask } from '../lib/storage';
 import { useAuth } from './AuthProvider';
-import { playRubberStampSound, playTypewriterClick } from '../lib/sound';
+import { playRubberStampSound, playTypewriterClick, playVintageBell } from '../lib/sound';
 import { X, Plus, Trash2, Stamp, Calendar, Clock, Bell, Repeat, CheckSquare } from 'lucide-react';
 
 interface TaskModalProps {
@@ -104,6 +104,10 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
     if (!title.trim()) return;
 
     playRubberStampSound();
+
+    if (reminderTime && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
 
     if (taskToEdit) {
       updateTask(taskToEdit.id, {
@@ -307,15 +311,37 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
                   Website alerts you with a chime & notification at this exact scheduled time
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Bell size={16} style={{ color: 'var(--brass-gold)' }} />
-                <input
-                  type="time"
-                  value={reminderTime}
-                  onChange={(e) => setReminderTime(e.target.value)}
-                  className="vintage-input"
-                  style={{ width: '135px', padding: '0.35rem 0.6rem', fontSize: '0.85rem', fontWeight: 600 }}
-                />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.35rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Bell size={16} style={{ color: 'var(--brass-gold)' }} />
+                  <input
+                    type="time"
+                    value={reminderTime}
+                    onChange={(e) => setReminderTime(e.target.value)}
+                    onFocus={() => {
+                      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+                        Notification.requestPermission().catch(() => {});
+                      }
+                    }}
+                    className="vintage-input"
+                    style={{ width: '135px', padding: '0.35rem 0.6rem', fontSize: '0.85rem', fontWeight: 600 }}
+                  />
+                </div>
+                {reminderTime && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default' && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const perm = await Notification.requestPermission();
+                        if (perm === 'granted') playVintageBell();
+                      } catch {}
+                    }}
+                    className="btn-parchment"
+                    style={{ fontSize: '0.66rem', padding: '0.15rem 0.45rem', color: 'var(--brass-dark)' }}
+                  >
+                    <span>🔔 Allow Desktop Alerts</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>

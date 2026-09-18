@@ -265,6 +265,18 @@ export default function AdminDashboardPage() {
     syncData();
   };
 
+  const isReminderDueNow = (t: Task) => {
+    if (!t.reminderTime || t.status === 'completed' || t.status === 'deleted') return false;
+    const parts = t.reminderTime.split(':');
+    if (parts.length < 2) return false;
+    const h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if (isNaN(h) || isNaN(m)) return false;
+    const now = new Date();
+    const currentMin = now.getHours() * 60 + now.getMinutes();
+    return currentMin >= h * 60 + m;
+  };
+
   // ═══════════════════════════════════════════════════════════════════════════
   // 1. EXECUTIVE AUTHENTICATION GUARDS
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1095,6 +1107,25 @@ export default function AdminDashboardPage() {
                               <span style={{ fontSize: '0.72rem', color: 'var(--ink-muted)' }}>
                                 Due: {t.dueDate || 'Today'}
                               </span>
+                              {t.reminderTime && (
+                                <span
+                                  style={{
+                                    fontSize: '0.68rem',
+                                    color: isReminderDueNow(t) ? 'var(--stamp-red)' : 'var(--brass-dark)',
+                                    fontWeight: isReminderDueNow(t) ? 700 : 500,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.25rem',
+                                    padding: '0.05rem 0.35rem',
+                                    borderRadius: '2px',
+                                    backgroundColor: isReminderDueNow(t) ? 'var(--stamp-red-bg)' : 'var(--bg-card)',
+                                    border: isReminderDueNow(t) ? '1px solid var(--stamp-red)' : '1px solid var(--border-sepia)',
+                                  }}
+                                >
+                                  <Clock size={11} />
+                                  {t.reminderTime} {isReminderDueNow(t) ? '• TIME HIT / DUE' : '• REMINDER'}
+                                </span>
+                              )}
                             </div>
 
                             <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--ink-primary)', textDecoration: t.status === 'completed' ? 'line-through' : 'none' }}>

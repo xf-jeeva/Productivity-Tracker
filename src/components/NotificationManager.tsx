@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { getTasks, markTaskNotified, rolloverDailyRoutines, BUREAU_SYNC_EVENT } from '../lib/storage';
-import { playVintageBell, playTypewriterClick } from '../lib/sound';
+import { playVintageBell, playTypewriterClick, unlockAudioContext } from '../lib/sound';
 import { Task } from '../types';
-import { Bell, BellRing, X, Clock, CheckCircle2, AlertTriangle, Sparkles } from 'lucide-react';
+import { Bell, BellRing, X, Clock, AlertTriangle, Sparkles, CheckCircle2 } from 'lucide-react';
 
 interface ActiveAlert {
   id: string;
@@ -14,30 +14,83 @@ interface ActiveAlert {
   message: string;
 }
 
-// Calculate HH:mm 10 minutes before the given time string
-function getTenMinutesBefore(timeStr: string): string {
-  const parts = timeStr.split(':');
-  if (parts.length < 2) return '';
-  const h = parseInt(parts[0], 10);
-  const m = parseInt(parts[1], 10);
-  if (isNaN(h) || isNaN(m)) return '';
-  let totalMin = h * 60 + m - 10;
-  if (totalMin < 0) totalMin += 24 * 60;
-  const outH = Math.floor(totalMin / 60);
-  const outM = totalMin % 60;
-  return `${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}`;
+// Robustly parse time string (HH:mm, H:mm, etc.) into total minutes from midnight
+export function parseTimeToMinutes(timeStr?: string | null): number | null {
+  if (!timeStr) return null;
+  const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const h = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10);
+  if (isNaN(h) || isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59) return null;
+  return h * 60 + m;
+}
+
+// Format minutes from midnight to HH:mm string
+export function formatMinutesToHHmm(totalMinutes: number): string {
+  const norm = ((totalMinutes % 1440) + 1440) % 1440;
+  const h = Math.floor(norm / 60);
+  const m = norm % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 export default function NotificationManager() {
   const [activeAlerts, setActiveAlerts] = useState<ActiveAlert[]>([]);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+  const [testSent, setTestSent] = useState(false);
+  const lastCheckedDateRef = useRef<string>('');
 
+  // Update permission status
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       setNotificationPermission(Notification.permission);
     }
+  }, []);
 
-    // 1. Check & perform daily routine rollover for new day immediately on mount
+  const triggerTestAlert = useCallback(() => {
+    unlockAudioContext();
+    playVintageBell();
+
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        const notif = new Notification('🔔 Dispatch System Active • The Daily Bureau', {
+          body: 'Chime & desktop notification verified! Timed reminders will alert 10 min before and right when due.',
+          icon: '/bureau_crest.jpg',
+          tag: 'bureau-test-alert',
+        });
+        notif.onclick = () => {
+          window.focus();
+          notif.close();
+        };
+      } catch (err) {
+        console.warn('Native notification error:', err);
+      }
+    }
+
+    setTestSent(true);
+    setTimeout(() => setTestSent(false), 4000);
+
+    setActiveAlerts((prev) => [
+      {
+        id: `test-${Date.now()}`,
+        task: {
+          id: 'sys-test',
+          title: 'Mechanical Bell & Dispatch Notification Test',
+          itemType: 'task',
+          orderNumber: 100,
+          reminderTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        } as Task,
+        timeStr: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        alertType: 'due_now',
+        message: 'Acoustic bell chime and visual telegram toast verified operational. Your scheduled reminders will trigger automatically.',
+      },
+      ...prev,
+    ]);
+  }, []);
+
+  useEffect(() => {
+    lastCheckedDateRef.current = new Date().toLocaleDateString('en-CA');
+
+    // 1. Daily routine rollover on mount
     const initialRollover = rolloverDailyRoutines();
     if (initialRollover.rolledOverCount > 0) {
       setActiveAlerts((prev) => [
@@ -52,20 +105,16 @@ export default function NotificationManager() {
       ]);
     }
 
-    let lastCheckedDate = typeof window !== 'undefined' ? new Date().toLocaleDateString('en-CA') : '';
-
     const checkReminders = () => {
       if (typeof window === 'undefined') return;
 
       const now = new Date();
-      const hours = String(now.getHours()).padStart(2, '0');
-      const minutes = String(now.getMinutes()).padStart(2, '0');
-      const currentHHmm = `${hours}:${minutes}`;
       const todayStr = now.toLocaleDateString('en-CA');
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
       // ── Midnight check: If date rolled over past 12:00 AM ──
-      if (todayStr !== lastCheckedDate) {
-        lastCheckedDate = todayStr;
+      if (todayStr !== lastCheckedDateRef.current) {
+        lastCheckedDateRef.current = todayStr;
         const res = rolloverDailyRoutines();
         if (res.rolledOverCount > 0) {
           playVintageBell();
@@ -90,25 +139,41 @@ export default function NotificationManager() {
       );
 
       activeTimedTasks.forEach((task) => {
-        const reminderTime = task.reminderTime!;
-        const tenMinBefore = getTenMinutesBefore(reminderTime);
+        const reminderMinutes = parseTimeToMinutes(task.reminderTime);
+        if (reminderMinutes === null) return;
 
-        const key10Min = `bureau_alert_10min_${task.id}_${todayStr}`;
-        const keyDueNow = `bureau_alert_due_${task.id}_${todayStr}`;
+        const cleanReminderTime = formatMinutesToHHmm(reminderMinutes);
+        const key10Min = `bureau_alert_10min_${task.id}_${cleanReminderTime}_${todayStr}`;
+        const keyDueNow = `bureau_alert_due_${task.id}_${cleanReminderTime}_${todayStr}`;
+
+        // Minutes until scheduled time:
+        const diffToReminder = (reminderMinutes - currentMinutes + 1440) % 1440;
 
         // ── STAGE 1: 10-Minute Advance Notice ─────────────────────────────────
-        if (currentHHmm === tenMinBefore && !localStorage.getItem(key10Min)) {
+        // Trigger if current time is within 1 to 10 minutes prior to reminder time
+        if (
+          diffToReminder > 0 &&
+          diffToReminder <= 10 &&
+          !localStorage.getItem(key10Min) &&
+          !localStorage.getItem(keyDueNow)
+        ) {
           localStorage.setItem(key10Min, '1');
+          unlockAudioContext();
           playVintageBell();
 
           if ('Notification' in window && Notification.permission === 'granted') {
             try {
-              new Notification('⏰ 10-Minute Dispatch Notice • The Daily Bureau', {
-                body: `"${task.title}" starts in 10 minutes (at ${reminderTime}). Prepare your workspace!`,
+              const notif = new Notification('⏰ 10-Minute Dispatch Notice • The Daily Bureau', {
+                body: `"${task.title}" starts in ${diffToReminder} min (at ${cleanReminderTime}). Prepare your workspace!`,
                 icon: '/bureau_crest.jpg',
+                tag: `bureau-10m-${task.id}`,
               });
+              notif.onclick = () => {
+                window.focus();
+                notif.close();
+              };
             } catch {
-              // Ignore fallback
+              // Fallback silently
             }
           }
 
@@ -118,26 +183,40 @@ export default function NotificationManager() {
               task,
               timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               alertType: 'warning_10min',
-              message: `Scheduled for ${reminderTime} — starts in exactly 10 minutes.`,
+              message: `Scheduled for ${cleanReminderTime} — starts in ${diffToReminder} minute(s).`,
             },
             ...prev,
           ]);
         }
 
-        // ── STAGE 2: Reminder Time Reached (Due Now) ──────────────────────────
-        if (currentHHmm === reminderTime && !localStorage.getItem(keyDueNow)) {
+        // ── STAGE 2: Scheduled Time Reached (TIME HIT / DUE NOW) ───────────────
+        // Trigger when current time reaches or has reached scheduled time today.
+        // We use a 60-minute window (currentMinutes >= reminderMinutes && diff <= 60)
+        // so that even if the browser tab was throttled, minimized, or machine slept,
+        // the notification fires immediately when active.
+        const isTimeHit = currentMinutes >= reminderMinutes && (currentMinutes - reminderMinutes) <= 60;
+
+        if (isTimeHit && !localStorage.getItem(keyDueNow) && task.lastNotifiedDate !== todayStr) {
           localStorage.setItem(keyDueNow, '1');
+          localStorage.setItem(key10Min, '1'); // Suppress stale 10-minute alert
           markTaskNotified(task.id, todayStr);
+          unlockAudioContext();
           playVintageBell();
 
           if ('Notification' in window && Notification.permission === 'granted') {
             try {
-              new Notification('🚨 Dispatch Time Reached! • The Daily Bureau', {
-                body: `"${task.title}" is due now (${reminderTime})! Added to your active pending attention list.`,
+              const notif = new Notification('🚨 Dispatch Time Reached! • The Daily Bureau', {
+                body: `"${task.title}" is due now (${cleanReminderTime})! Added to your active pending attention list.`,
                 icon: '/bureau_crest.jpg',
+                tag: `bureau-due-${task.id}`,
+                requireInteraction: true,
               });
+              notif.onclick = () => {
+                window.focus();
+                notif.close();
+              };
             } catch {
-              // Ignore fallback
+              // Fallback silently
             }
           }
 
@@ -147,7 +226,7 @@ export default function NotificationManager() {
               task,
               timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               alertType: 'due_now',
-              message: `Scheduled work time reached (${reminderTime}). Marked for immediate attention on your desk.`,
+              message: `Scheduled work time reached (${cleanReminderTime}). Marked for immediate attention on your desk.`,
             },
             ...prev,
           ]);
@@ -155,20 +234,50 @@ export default function NotificationManager() {
       });
     };
 
-    // Check immediately and every 5 seconds
+    // Run check immediately on mount
     checkReminders();
-    const interval = setInterval(checkReminders, 5000);
 
-    return () => clearInterval(interval);
+    // Check every 2.5 seconds for pinpoint accuracy
+    const interval = setInterval(checkReminders, 2500);
+
+    // Watchdog event listeners: react immediately when tasks change or user returns to tab
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkReminders();
+      }
+    };
+    const handleFocus = () => checkReminders();
+    const handleSync = () => checkReminders();
+
+    window.addEventListener(BUREAU_SYNC_EVENT, handleSync);
+    window.addEventListener('storage', handleSync);
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener(BUREAU_SYNC_EVENT, handleSync);
+      window.removeEventListener('storage', handleSync);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   const requestPermission = async () => {
     playTypewriterClick();
     if (typeof window !== 'undefined' && 'Notification' in window) {
-      const perm = await Notification.requestPermission();
-      setNotificationPermission(perm);
-      if (perm === 'granted') {
-        playVintageBell();
+      try {
+        const perm = await Notification.requestPermission();
+        setNotificationPermission(perm);
+        if (perm === 'granted') {
+          playVintageBell();
+          new Notification('🔔 Reminders Activated • The Daily Bureau', {
+            body: 'You will receive advance notices (10 min before) and chime alerts when scheduled dispatch times are hit.',
+            icon: '/bureau_crest.jpg',
+          });
+        }
+      } catch (err) {
+        console.warn('Error requesting notification permission:', err);
       }
     }
   };
@@ -180,7 +289,7 @@ export default function NotificationManager() {
 
   return (
     <>
-      {/* Optional Top Prompt if browser notification not enabled */}
+      {/* Top Notification Status Bar */}
       {notificationPermission === 'default' && (
         <div
           style={{
@@ -199,12 +308,50 @@ export default function NotificationManager() {
             <Bell size={13} style={{ color: 'var(--brass-gold)' }} />
             <span>Enable website notifications to receive timed dispatch alerts (10 min before & when due) directly on your screen.</span>
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <button
+              onClick={requestPermission}
+              className="btn-brass"
+              style={{ padding: '0.2rem 0.65rem', fontSize: '0.7rem' }}
+            >
+              Enable Reminders
+            </button>
+            <button
+              onClick={triggerTestAlert}
+              className="btn-parchment"
+              style={{ padding: '0.2rem 0.65rem', fontSize: '0.7rem' }}
+              title="Test chime sound and toast alert"
+            >
+              Test Alert
+            </button>
+          </div>
+        </div>
+      )}
+
+      {notificationPermission === 'denied' && (
+        <div
+          style={{
+            backgroundColor: '#fee2e2',
+            borderBottom: '1px solid #f87171',
+            padding: '0.35rem 1.5rem',
+            fontSize: '0.72rem',
+            color: '#991b1b',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <AlertTriangle size={13} />
+            <span>Desktop notifications are currently blocked in your browser. Click the site settings icon in the address bar to Allow notifications for timed alerts.</span>
+          </div>
           <button
-            onClick={requestPermission}
-            className="btn-brass"
-            style={{ padding: '0.2rem 0.65rem', fontSize: '0.7rem' }}
+            onClick={triggerTestAlert}
+            className="btn-parchment"
+            style={{ padding: '0.15rem 0.5rem', fontSize: '0.68rem' }}
           >
-            Enable Reminders
+            Test Sound Chime
           </button>
         </div>
       )}
@@ -283,7 +430,7 @@ export default function NotificationManager() {
                     ) : (
                       <>
                         <BellRing size={13} />
-                        <span>DISPATCH TIME REACHED • DUE NOW ({alert.task.reminderTime})</span>
+                        <span>DISPATCH TIME REACHED • DUE NOW ({alert.task.reminderTime || alert.timeStr})</span>
                       </>
                     )}
                   </div>

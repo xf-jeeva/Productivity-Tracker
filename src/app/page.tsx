@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
@@ -53,23 +53,27 @@ export default function MyDeskPage() {
     return () => window.removeEventListener(BUREAU_SYNC_EVENT, handleSync);
   }, []);
 
-  const currentUser = authUser
-    ? {
+  const currentUser = useMemo(() => {
+    if (authUser) {
+      return {
         id: authUser.id,
         name: authUser.name,
         email: authUser.email,
         avatarUrl: authUser.avatarUrl || undefined,
         role: authUser.role,
-      }
-    : localUser
-    ? {
+      };
+    }
+    if (localUser) {
+      return {
         id: localUser.id,
         name: localUser.name,
         email: localUser.email || `${localUser.username}@dailybureau.org`,
         avatarUrl: localUser.avatar,
         role: localUser.role,
-      }
-    : null;
+      };
+    }
+    return null;
+  }, [authUser, localUser]);
   
   const [activeView, setActiveView] = useState<'active' | 'completed' | 'deleted'>('active');
   const [searchQuery, setSearchQuery] = useState('');
@@ -88,7 +92,6 @@ export default function MyDeskPage() {
     }
 
     const sync = () => {
-      rolloverDailyRoutines();
       setTasks(getTasks());
       setIsLoading(false);
     };
@@ -99,7 +102,7 @@ export default function MyDeskPage() {
     if (savedNotes) setDeskNotes(savedNotes);
 
     return () => window.removeEventListener(BUREAU_SYNC_EVENT, sync);
-  }, [currentUser, authLoading, router]);
+  }, [currentUser?.id, authLoading, router]);
 
   const handleSaveNotes = (val: string) => {
     setDeskNotes(val);

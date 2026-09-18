@@ -357,6 +357,11 @@ export function updateTask(id: string, updates: Partial<Task>): Task | null {
   const index = tasks.findIndex((t) => t.id === id);
   if (index === -1) return null;
 
+  // If reminder time is changed, clear lastNotifiedDate so the newly scheduled time alerts properly
+  if (updates.reminderTime !== undefined && updates.reminderTime !== tasks[index].reminderTime) {
+    updates.lastNotifiedDate = undefined;
+  }
+
   tasks[index] = { ...tasks[index], ...updates };
   if (isBrowser) {
     localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
@@ -543,6 +548,10 @@ export function markTaskNotified(taskId: string, dateStr: string): void {
   tasks[index].lastNotifiedDate = dateStr;
   if (isBrowser) {
     localStorage.setItem(TASKS_KEY, JSON.stringify(tasks));
+  }
+  emitSync();
+  if (isSupabaseConfigured) {
+    pushCloudTask(tasks[index]).catch(() => {});
   }
 }
 
