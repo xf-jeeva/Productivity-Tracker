@@ -22,7 +22,7 @@ import {
   MIN_REDEEM_AMOUNT_RUPEES,
   MIN_REDEEM_TOKENS
 } from '@/lib/storage';
-import { getAllProfiles, isMasterAdmin, deleteUserCompletely } from '@/lib/auth';
+import { getAllProfiles, isMasterAdmin, deleteUserCompletely, getDeletedUserIdsSync } from '@/lib/auth';
 import { fetchAllCloudTasks } from '@/lib/cloudTasks';
 import { fetchCloudNotes } from '@/lib/cloudNotes';
 import { supabase } from '@/lib/supabase';
@@ -108,9 +108,15 @@ export default function AdminDashboardPage() {
   // ── Master data synchronization ───────────────────────────────────────────
   const syncData = async () => {
     rolloverDailyRoutines();
+    const deletedSet = getDeletedUserIdsSync();
     const rawLocalUsers = getUsers();
     const localUsers = rawLocalUsers.filter(
-      (u) => u.id !== 'usr-admin' && u.username?.toLowerCase() !== 'admin' && u.email?.toLowerCase() !== 'admin@dailybureau.org'
+      (u) =>
+        u.id !== 'usr-admin' &&
+        u.username?.toLowerCase() !== 'admin' &&
+        u.email?.toLowerCase() !== 'admin@dailybureau.org' &&
+        !deletedSet.has(u.id.toLowerCase().trim()) &&
+        (!u.email || !deletedSet.has(u.email.toLowerCase().trim()))
     );
     setUsers(localUsers);
     setTasks(getTasks());
@@ -124,7 +130,11 @@ export default function AdminDashboardPage() {
 
       if (cloudProfiles && cloudProfiles.length > 0) {
         const validProfiles = cloudProfiles.filter(
-          (p) => p.id !== 'usr-admin' && p.email?.toLowerCase() !== 'admin@dailybureau.org'
+          (p) =>
+            p.id !== 'usr-admin' &&
+            p.email?.toLowerCase() !== 'admin@dailybureau.org' &&
+            !deletedSet.has(p.id.toLowerCase().trim()) &&
+            (!p.email || !deletedSet.has(p.email.toLowerCase().trim()))
         );
         const profileIds = new Set(validProfiles.map((p) => p.id));
         const profileEmails = new Set(validProfiles.map((p) => p.email.toLowerCase()));
@@ -153,7 +163,11 @@ export default function AdminDashboardPage() {
         const merged = [
           ...formattedUsers,
           ...localUsers.filter(
-            (u) => !profileIds.has(u.id) && (!u.email || !profileEmails.has(u.email.toLowerCase()))
+            (u) =>
+              !profileIds.has(u.id) &&
+              (!u.email || !profileEmails.has(u.email.toLowerCase())) &&
+              !deletedSet.has(u.id.toLowerCase().trim()) &&
+              (!u.email || !deletedSet.has(u.email.toLowerCase().trim()))
           ),
         ];
         setUsers(merged);
@@ -336,18 +350,38 @@ export default function AdminDashboardPage() {
 
     playTypewriterClick();
     setIsDeletingUser(true);
-    const result = await deleteUserCompletely(targetUser.id, targetUser.email);
+
+    const targetId = targetUser.id;
+    const targetEmail = targetUser.email;
+
+    // Immediately remove target user from state
+    const remaining = users.filter(
+      (u) =>
+        u.id !== targetId &&
+        (!targetEmail || u.email?.toLowerCase().trim() !== targetEmail.toLowerCase().trim())
+    );
+    setUsers(remaining);
+    setSelectedUser(remaining.find((u) => isMasterAdmin(u.email)) || remaining[0] || null);
+
+    // Also purge tasks from state immediately
+    setTasks((prevTasks) =>
+      prevTasks.filter((t) => {
+        const matchAssignee = t.assigneeId === targetId || (targetEmail && t.assigneeId?.toLowerCase() === targetEmail.toLowerCase().trim());
+        const matchCreator = t.createdById === targetId || (targetEmail && t.createdById?.toLowerCase() === targetEmail.toLowerCase().trim());
+        return !matchAssignee && !matchCreator;
+      })
+    );
+
+    const result = await deleteUserCompletely(targetId, targetEmail);
     setIsDeletingUser(false);
 
     if (result.success) {
       playVintageBell();
-      const remaining = users.filter((u) => u.id !== targetUser.id);
-      setUsers(remaining);
-      setSelectedUser(remaining.find((u) => isMasterAdmin(u.email)) || remaining[0] || null);
-      syncData();
+      await syncData();
       alert(`User "${targetUser.name}" and all their tasks were permanently removed from the database.`);
     } else {
       alert(`Error deleting user: ${result.error}`);
+      await syncData();
     }
   };
 

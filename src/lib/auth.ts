@@ -19,6 +19,85 @@ export function isMasterAdmin(email?: string | null): boolean {
   return email.toLowerCase().trim() === MASTER_ADMIN_EMAIL;
 }
 
+// Key for storing permanently deleted user IDs & emails across local sessions
+export const DELETED_USERS_STORAGE_KEY = 'daily_bureau_deleted_user_ids_v3';
+
+// Synchronous check: get set of all deleted user IDs & emails from local cache (0ms)
+export function getDeletedUserIdsSync(): Set<string> {
+  const set = new Set<string>();
+  if (typeof window === 'undefined') return set;
+  try {
+    const raw = localStorage.getItem(DELETED_USERS_STORAGE_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        arr.forEach((item) => {
+          if (typeof item === 'string' && item.trim()) {
+            set.add(item.toLowerCase().trim());
+          }
+        });
+      }
+    }
+  } catch {}
+  return set;
+}
+
+// Record a deleted tombstone locally
+export function saveDeletedTombstoneLocal(id: string, email?: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const set = getDeletedUserIdsSync();
+    if (id) set.add(id.toLowerCase().trim());
+    if (email) set.add(email.toLowerCase().trim());
+    localStorage.setItem(DELETED_USERS_STORAGE_KEY, JSON.stringify(Array.from(set)));
+  } catch {}
+}
+
+// Query persistent tombstones from Supabase bureau_users table (which has open RLS)
+export async function getDeletedUserTombstones(): Promise<{ ids: Set<string>; emails: Set<string> }> {
+  const localSet = getDeletedUserIdsSync();
+  const ids = new Set<string>();
+  const emails = new Set<string>();
+
+  localSet.forEach((val) => {
+    if (val.includes('@')) {
+      emails.add(val.toLowerCase());
+    } else {
+      ids.add(val);
+    }
+  });
+
+  if (!supabase) return { ids, emails };
+
+  try {
+    const { data, error } = await supabase
+      .from('bureau_users')
+      .select('id, username, role, department, desk_number')
+      .or('role.eq.deleted,id.like.deleted_%,username.like.__deleted__%');
+
+    if (!error && data) {
+      data.forEach((r) => {
+        if (r.desk_number) ids.add(r.desk_number.toLowerCase().trim());
+        if (typeof r.id === 'string' && r.id.startsWith('deleted_')) {
+          ids.add(r.id.replace('deleted_', '').toLowerCase().trim());
+        }
+        if (typeof r.department === 'string' && r.department.includes('@')) {
+          emails.add(r.department.toLowerCase().trim());
+        }
+      });
+      // Save merged tombstones back to localStorage
+      if (typeof window !== 'undefined') {
+        const combined = Array.from(new Set([...Array.from(ids), ...Array.from(emails)]));
+        localStorage.setItem(DELETED_USERS_STORAGE_KEY, JSON.stringify(combined));
+      }
+    }
+  } catch (e) {
+    console.warn('[Supabase] getDeletedUserTombstones notice:', e);
+  }
+
+  return { ids, emails };
+}
+
 // Quick synchronous check: does localStorage contain a Supabase auth token?
 export function hasLocalAuthSession(): boolean {
   if (typeof window === 'undefined') return false;
@@ -39,6 +118,8 @@ export function hasLocalAuthSession(): boolean {
 // Extract cached AuthUser immediately from localStorage in 0ms (no network delay)
 export function getCachedAuthUser(): AuthUser | null {
   if (typeof window === 'undefined') return null;
+  const deletedSet = getDeletedUserIdsSync();
+
   try {
     // 1. Try local storage user profile first (instant, 0ms)
     const stored = localStorage.getItem('daily_bureau_current_user_v3');
@@ -46,6 +127,10 @@ export function getCachedAuthUser(): AuthUser | null {
       const u = JSON.parse(stored);
       if (u?.id && (u?.email || u?.username)) {
         const email = u.email || '';
+        // If user was deleted, do not return cached auth
+        if (deletedSet.has(u.id.toLowerCase()) || (email && deletedSet.has(email.toLowerCase()))) {
+          return null;
+        }
         return {
           id: u.id,
           email,
@@ -65,6 +150,9 @@ export function getCachedAuthUser(): AuthUser | null {
           const parsed = JSON.parse(val);
           const su = parsed?.user;
           if (su?.id && su?.email) {
+            if (deletedSet.has(su.id.toLowerCase()) || deletedSet.has(su.email.toLowerCase())) {
+              return null;
+            }
             const role = isMasterAdmin(su.email) ? 'admin' : 'member';
             return {
               id: su.id,
@@ -107,6 +195,10 @@ export function mapSupabaseUserToAuthUser(user: User): AuthUser {
 export function syncProfileInBackground(user: User): void {
   if (!supabase) return;
   const authUser = mapSupabaseUserToAuthUser(user);
+  const deletedSet = getDeletedUserIdsSync();
+  if (deletedSet.has(authUser.id.toLowerCase()) || (authUser.email && deletedSet.has(authUser.email.toLowerCase()))) {
+    return;
+  }
 
   Promise.resolve(
     supabase
@@ -148,6 +240,11 @@ export async function getAuthUser(): Promise<AuthUser | null> {
 
     if (session?.user) {
       const authUser = mapSupabaseUserToAuthUser(session.user);
+      const deletedSet = getDeletedUserIdsSync();
+      if (deletedSet.has(authUser.id.toLowerCase()) || (authUser.email && deletedSet.has(authUser.email.toLowerCase()))) {
+        signOut();
+        return null;
+      }
       syncProfileInBackground(session.user);
       return authUser;
     }
@@ -164,6 +261,11 @@ export async function getAuthUser(): Promise<AuthUser | null> {
     const { data: { user } } = await Promise.race([userPromise, timeoutPromise]);
     if (user) {
       const authUser = mapSupabaseUserToAuthUser(user);
+      const deletedSet = getDeletedUserIdsSync();
+      if (deletedSet.has(authUser.id.toLowerCase()) || (authUser.email && deletedSet.has(authUser.email.toLowerCase()))) {
+        signOut();
+        return null;
+      }
       syncProfileInBackground(user);
       return authUser;
     }
@@ -222,6 +324,12 @@ export function onAuthStateChange(callback: (user: AuthUser | null) => void) {
   const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
     if (session?.user) {
       const authUser = mapSupabaseUserToAuthUser(session.user);
+      const deletedSet = getDeletedUserIdsSync();
+      if (deletedSet.has(authUser.id.toLowerCase()) || (authUser.email && deletedSet.has(authUser.email.toLowerCase()))) {
+        signOut();
+        callback(null);
+        return;
+      }
       syncProfileInBackground(session.user);
       callback(authUser);
     } else {
@@ -237,22 +345,38 @@ export async function updateUserRole(userId: string, role: 'admin' | 'member'): 
   await supabase.from('profiles').update({ role }).eq('id', userId);
 }
 
-// ── Get all users (admin only) ────────────────────────────────────────────
+// ── Get all users (admin only) with permanent tombstone filtering ─────────
 export async function getAllProfiles(): Promise<AuthUser[]> {
   if (!supabase) return [];
   try {
-    const { data, error } = await supabase.from('profiles').select('*').order('created_at');
-    if (error) {
-      console.warn('[Supabase] getAllProfiles:', error.message);
+    const [profilesRes, tombstones] = await Promise.all([
+      supabase.from('profiles').select('*').order('created_at'),
+      getDeletedUserTombstones(),
+    ]);
+
+    if (profilesRes.error) {
+      console.warn('[Supabase] getAllProfiles:', profilesRes.error.message);
       return [];
     }
-    return (data ?? []).map((p: SupabaseProfile) => ({
-      id: p.id,
-      email: p.email,
-      name: p.name ?? p.email.split('@')[0],
-      avatarUrl: p.avatar_url,
-      role: isMasterAdmin(p.email) ? 'admin' : 'member',
-    }));
+
+    const { ids: deletedIds, emails: deletedEmails } = tombstones;
+
+    return (profilesRes.data ?? [])
+      .filter((p: SupabaseProfile) => {
+        if (!p.id || !p.email) return false;
+        if (p.id === 'usr-admin' || p.email.toLowerCase() === 'admin@dailybureau.org') return false;
+        // Permanently filter out any deleted user
+        if (deletedIds.has(p.id.toLowerCase().trim())) return false;
+        if (deletedEmails.has(p.email.toLowerCase().trim())) return false;
+        return true;
+      })
+      .map((p: SupabaseProfile) => ({
+        id: p.id,
+        email: p.email,
+        name: p.name ?? p.email.split('@')[0],
+        avatarUrl: p.avatar_url,
+        role: isMasterAdmin(p.email) ? 'admin' : 'member',
+      }));
   } catch (e) {
     console.warn('[Supabase] getAllProfiles error:', e);
     return [];
@@ -268,66 +392,102 @@ export async function deleteUserCompletely(
     return { success: false, error: 'Cannot delete the Master Administrator account.' };
   }
 
+  const cleanEmail = (userEmail || '').toLowerCase().trim();
+
+  // 1. Instantly record tombstone in localStorage (0ms synchronous)
+  saveDeletedTombstoneLocal(userId, cleanEmail);
+
   try {
     if (supabase) {
-      // 1. Delete from profiles table in Supabase
-      const { error: profileErr } = await supabase.from('profiles').delete().eq('id', userId);
-      if (profileErr) console.warn('[Supabase] delete profile notice:', profileErr.message);
-
-      if (userEmail) {
-        await supabase.from('profiles').delete().eq('email', userEmail);
+      // 2. Persist tombstone in Supabase bureau_users table (which has open RLS)
+      // This guarantees all devices and future sessions know this user is permanently deleted
+      try {
+        await supabase.from('bureau_users').upsert({
+          id: `deleted_${userId}`,
+          username: `__deleted__${userId}`,
+          password: 'DELETED',
+          name: '[Deleted User]',
+          role: 'deleted',
+          department: cleanEmail,
+          desk_number: userId,
+          title: new Date().toISOString(),
+        }, { onConflict: 'id' });
+      } catch (e) {
+        console.warn('bureau_users tombstone notice:', e);
       }
 
-      // 2. Delete from bureau_users table in Supabase
-      await supabase.from('bureau_users').delete().eq('id', userId);
-
-      // 3. Delete all tasks & routines belonging to or created by this user
-      const taskOr = [`assignee_id.eq.${userId}`, `created_by_id.eq.${userId}`];
-      if (userEmail) {
-        taskOr.push(`assignee_id.eq.${userEmail}`);
-        taskOr.push(`created_by_id.eq.${userEmail}`);
-        const handle = userEmail.split('@')[0];
-        if (handle) {
-          taskOr.push(`assignee_id.eq.${handle}`);
-          taskOr.push(`created_by_username.eq.${handle}`);
+      // 3. Delete any active row from bureau_users
+      try {
+        await supabase.from('bureau_users').delete().eq('id', userId);
+        if (cleanEmail) {
+          const handle = cleanEmail.split('@')[0];
+          if (handle) {
+            await supabase.from('bureau_users').delete().eq('username', handle);
+          }
         }
-      }
-      await supabase.from('bureau_tasks').delete().or(taskOr.join(','));
+      } catch {}
 
-      // 4. Delete user's sticky notes from Supabase
-      await supabase.from('bureau_sticky_notes').delete().eq('user_id', userId);
+      // 4. Attempt deleting from profiles table
+      try {
+        await supabase.from('profiles').delete().eq('id', userId);
+        if (cleanEmail) {
+          await supabase.from('profiles').delete().eq('email', cleanEmail);
+        }
+      } catch {}
+
+      // 5. Delete all tasks & routines for this user from bureau_tasks
+      try {
+        const taskOr = [`assignee_id.eq.${userId}`, `created_by_id.eq.${userId}`];
+        if (cleanEmail) {
+          taskOr.push(`assignee_id.eq.${cleanEmail}`);
+          taskOr.push(`created_by_id.eq.${cleanEmail}`);
+          const handle = cleanEmail.split('@')[0];
+          if (handle) {
+            taskOr.push(`assignee_id.eq.${handle}`);
+            taskOr.push(`created_by_username.eq.${handle}`);
+          }
+        }
+        await supabase.from('bureau_tasks').delete().or(taskOr.join(','));
+      } catch (e) {
+        console.warn('bureau_tasks delete notice:', e);
+      }
+
+      // 6. Delete sticky notes
+      try {
+        await supabase.from('bureau_sticky_notes').delete().eq('user_id', userId);
+      } catch {}
     }
 
-    // 5. Clean up localStorage
+    // 7. Clean up localStorage
     if (typeof window !== 'undefined') {
-      // Clean users list
+      // Filter users
       const usersRaw = localStorage.getItem('daily_bureau_users_v3');
       if (usersRaw) {
         try {
           const users = JSON.parse(usersRaw);
           const filtered = users.filter(
             (u: { id: string; email?: string }) =>
-              u.id !== userId && (!userEmail || u.email?.toLowerCase() !== userEmail.toLowerCase())
+              u.id !== userId && (!cleanEmail || u.email?.toLowerCase().trim() !== cleanEmail)
           );
           localStorage.setItem('daily_bureau_users_v3', JSON.stringify(filtered));
         } catch {}
       }
 
-      // Clean tasks list
+      // Filter tasks
       const tasksRaw = localStorage.getItem('daily_bureau_tasks_v3');
       if (tasksRaw) {
         try {
           const tasks = JSON.parse(tasksRaw);
           const filteredTasks = tasks.filter((t: { assigneeId?: string; createdById?: string }) => {
-            const matchAssignee = t.assigneeId === userId || (userEmail && t.assigneeId === userEmail);
-            const matchCreator = t.createdById === userId || (userEmail && t.createdById === userEmail);
+            const matchAssignee = t.assigneeId === userId || (cleanEmail && t.assigneeId?.toLowerCase() === cleanEmail);
+            const matchCreator = t.createdById === userId || (cleanEmail && t.createdById?.toLowerCase() === cleanEmail);
             return !matchAssignee && !matchCreator;
           });
           localStorage.setItem('daily_bureau_tasks_v3', JSON.stringify(filteredTasks));
         } catch {}
       }
 
-      // Clean sticky notes
+      // Filter sticky notes
       const notesRaw = localStorage.getItem('daily_bureau_sticky_notes_v3');
       if (notesRaw) {
         try {
@@ -337,15 +497,14 @@ export async function deleteUserCompletely(
         } catch {}
       }
 
-      // Clean desk notes
       localStorage.removeItem(`bureau_desk_notes_${userId}`);
 
-      // Clear current user if it was this user
+      // Clear current user if it's the deleted user
       const currentUserRaw = localStorage.getItem('daily_bureau_current_user_v3');
       if (currentUserRaw) {
         try {
           const cu = JSON.parse(currentUserRaw);
-          if (cu.id === userId || (userEmail && cu.email?.toLowerCase() === userEmail.toLowerCase())) {
+          if (cu.id === userId || (cleanEmail && cu.email?.toLowerCase().trim() === cleanEmail)) {
             localStorage.removeItem('daily_bureau_current_user_v3');
           }
         } catch {}
@@ -362,3 +521,4 @@ export async function deleteUserCompletely(
     return { success: false, error: msg };
   }
 }
+

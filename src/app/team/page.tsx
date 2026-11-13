@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getUsers, getTasks, addUser, deleteUser, setCurrentUser, getCurrentUser, BUREAU_SYNC_EVENT } from '@/lib/storage';
-import { getAllProfiles, isMasterAdmin, deleteUserCompletely } from '@/lib/auth';
+import { getAllProfiles, isMasterAdmin, deleteUserCompletely, getDeletedUserIdsSync } from '@/lib/auth';
 import { useAuth } from '@/components/AuthProvider';
 import { User, Department, Task } from '@/types';
 import { playRubberStampSound, playTypewriterClick } from '@/lib/sound';
@@ -29,7 +29,15 @@ export default function TeamRosterPage() {
 
   useEffect(() => {
     const sync = async () => {
-      const raw = getUsers().filter((u) => u.id !== 'usr-admin' && u.username?.toLowerCase() !== 'admin' && u.email?.toLowerCase() !== 'admin@dailybureau.org');
+      const deletedSet = getDeletedUserIdsSync();
+      const raw = getUsers().filter(
+        (u) =>
+          u.id !== 'usr-admin' &&
+          u.username?.toLowerCase() !== 'admin' &&
+          u.email?.toLowerCase() !== 'admin@dailybureau.org' &&
+          !deletedSet.has(u.id.toLowerCase().trim()) &&
+          (!u.email || !deletedSet.has(u.email.toLowerCase().trim()))
+      );
       setUsers(raw);
       setTasks(getTasks());
       setCurrentUserLocal(getCurrentUser());
@@ -37,30 +45,40 @@ export default function TeamRosterPage() {
       try {
         const cloudProfiles = await getAllProfiles();
         if (cloudProfiles && cloudProfiles.length > 0) {
-          const profileIds = new Set(cloudProfiles.map((p) => p.id));
-          const formatted: User[] = cloudProfiles
-            .filter((p) => p.id !== 'usr-admin' && p.email?.toLowerCase() !== 'admin@dailybureau.org')
-            .map((p) => {
-              const username = p.email ? p.email.split('@')[0] : p.id;
-              const existing = raw.find((u) => u.id === p.id || u.username.toLowerCase() === username.toLowerCase());
-              const isAdm = isMasterAdmin(p.email);
-              return {
-                id: p.id,
-                username: existing?.username || username,
-                password: '',
-                name: p.name || username,
-                email: p.email,
-                role: isAdm ? 'admin' : 'member',
-                avatar: p.avatarUrl || existing?.avatar,
-                title: existing?.title || (isAdm ? 'Chief Bureau Administrator' : 'Field Operative'),
-                department: existing?.department || 'Dispatch & Logistics',
-                deskNumber: existing?.deskNumber || `DK-${p.id.slice(0, 4).toUpperCase()}`,
-                createdAt: existing?.createdAt || new Date().toISOString(),
-              };
-            });
+          const validProfiles = cloudProfiles.filter(
+            (p) =>
+              p.id !== 'usr-admin' &&
+              p.email?.toLowerCase() !== 'admin@dailybureau.org' &&
+              !deletedSet.has(p.id.toLowerCase().trim()) &&
+              (!p.email || !deletedSet.has(p.email.toLowerCase().trim()))
+          );
+          const profileIds = new Set(validProfiles.map((p) => p.id));
+          const formatted: User[] = validProfiles.map((p) => {
+            const username = p.email ? p.email.split('@')[0] : p.id;
+            const existing = raw.find((u) => u.id === p.id || u.username.toLowerCase() === username.toLowerCase());
+            const isAdm = isMasterAdmin(p.email);
+            return {
+              id: p.id,
+              username: existing?.username || username,
+              password: '',
+              name: p.name || username,
+              email: p.email,
+              role: isAdm ? 'admin' : 'member',
+              avatar: p.avatarUrl || existing?.avatar,
+              title: existing?.title || (isAdm ? 'Chief Bureau Administrator' : 'Field Operative'),
+              department: existing?.department || 'Dispatch & Logistics',
+              deskNumber: existing?.deskNumber || `DK-${p.id.slice(0, 4).toUpperCase()}`,
+              createdAt: existing?.createdAt || new Date().toISOString(),
+            };
+          });
           const merged = [
             ...formatted,
-            ...raw.filter((u) => !profileIds.has(u.id)),
+            ...raw.filter(
+              (u) =>
+                !profileIds.has(u.id) &&
+                !deletedSet.has(u.id.toLowerCase().trim()) &&
+                (!u.email || !deletedSet.has(u.email.toLowerCase().trim()))
+            ),
           ];
           setUsers(merged);
         }
@@ -114,9 +132,15 @@ export default function TeamRosterPage() {
 
   const handleConfirmDelete = async (targetUser: User) => {
     playRubberStampSound();
-    const res = await deleteUserCompletely(targetUser.id, targetUser.email);
+    const targetId = targetUser.id;
+    const targetEmail = targetUser.email;
+    setUsers((prev) =>
+      prev.filter(
+        (u) => u.id !== targetId && (!targetEmail || u.email?.toLowerCase().trim() !== targetEmail.toLowerCase().trim())
+      )
+    );
+    const res = await deleteUserCompletely(targetId, targetEmail);
     if (res.success) {
-      setUsers((prev) => prev.filter((u) => u.id !== targetUser.id));
       setDeleteNotice(`User ${targetUser.name} (${targetUser.email || targetUser.username}) has been permanently deleted from database.`);
       setUserToDelete(null);
       setTimeout(() => setDeleteNotice(''), 4500);

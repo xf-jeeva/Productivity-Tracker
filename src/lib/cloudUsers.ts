@@ -22,6 +22,7 @@
 
 import { supabase, isSupabaseConfigured } from './supabase';
 import { User } from '../types';
+import { getDeletedUserIdsSync, saveDeletedTombstoneLocal } from './auth';
 
 const TABLE = 'bureau_users';
 
@@ -65,7 +66,29 @@ export async function fetchCloudUsers(): Promise<User[] | null> {
   try {
     const { data, error } = await supabase.from(TABLE).select('*');
     if (error) { console.warn('[Supabase] fetchCloudUsers:', error.message); return null; }
-    return (data ?? []).map(rowToUser);
+
+    // Cache tombstones locally for 0ms lookups
+    (data ?? []).forEach((r) => {
+      if (r.role === 'deleted' || (typeof r.id === 'string' && r.id.startsWith('deleted_'))) {
+        saveDeletedTombstoneLocal(
+          (r.desk_number as string) || (typeof r.id === 'string' ? r.id.replace('deleted_', '') : ''),
+          typeof r.department === 'string' && r.department.includes('@') ? r.department : undefined
+        );
+      }
+    });
+
+    const deletedSet = getDeletedUserIdsSync();
+
+    return (data ?? [])
+      .filter((r) => {
+        if (r.role === 'deleted') return false;
+        if (r.id === 'usr-admin') return false;
+        if (typeof r.id === 'string' && (r.id.startsWith('deleted_') || deletedSet.has(r.id.toLowerCase().trim()))) return false;
+        if (typeof r.username === 'string' && (r.username.startsWith('__deleted__') || r.username.toLowerCase() === 'admin')) return false;
+        if (typeof r.department === 'string' && deletedSet.has(r.department.toLowerCase().trim())) return false;
+        return true;
+      })
+      .map(rowToUser);
   } catch (e) {
     console.warn('[Supabase] fetchCloudUsers failed', e);
     return null;
@@ -75,6 +98,10 @@ export async function fetchCloudUsers(): Promise<User[] | null> {
 // ── Upsert a single user ──────────────────────────────────────────────────
 export async function pushSingleCloudUser(user: User): Promise<boolean> {
   if (!isSupabaseConfigured || !supabase) return false;
+  const deletedSet = getDeletedUserIdsSync();
+  if (deletedSet.has(user.id.toLowerCase().trim()) || (user.email && deletedSet.has(user.email.toLowerCase().trim()))) {
+    return false;
+  }
   try {
     const row = userToRow(user);
     const { error } = await supabase.from(TABLE).upsert(row, { onConflict: 'id' });
@@ -92,8 +119,16 @@ export async function pushSingleCloudUser(user: User): Promise<boolean> {
 // ── Upsert all users (used when admin creates a user) ─────────────────────
 export async function pushCloudUsers(users: User[]): Promise<void> {
   if (!isSupabaseConfigured || !supabase) return;
+  const deletedSet = getDeletedUserIdsSync();
+  const validUsers = users.filter(
+    (u) =>
+      u.id !== 'usr-admin' &&
+      u.username?.toLowerCase() !== 'admin' &&
+      !deletedSet.has(u.id.toLowerCase().trim()) &&
+      (!u.email || !deletedSet.has(u.email.toLowerCase().trim()))
+  );
   try {
-    const rows = users.map(userToRow);
+    const rows = validUsers.map(userToRow);
     const { error } = await supabase.from(TABLE).upsert(rows, { onConflict: 'id' });
     if (error) console.warn('[Supabase] pushCloudUsers:', error.message);
   } catch (e) {

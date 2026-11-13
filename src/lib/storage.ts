@@ -5,6 +5,7 @@ import { INITIAL_USERS, INITIAL_TASKS, INITIAL_LOGS, INITIAL_TOKEN_TRANSACTIONS,
 import { pushCloudUsers, pushSingleCloudUser, deleteCloudUser, isSupabaseConfigured } from './cloudUsers';
 import { pushCloudTask, deleteCloudTask } from './cloudTasks';
 import { pushCloudNote, deleteCloudNote } from './cloudNotes';
+import { getDeletedUserIdsSync, deleteUserCompletely } from './auth';
 
 const USERS_KEY = 'daily_bureau_users_v3';
 const TASKS_KEY = 'daily_bureau_tasks_v3';
@@ -70,8 +71,17 @@ export function getUsers(): User[] {
   }
   try {
     const parsed: User[] = JSON.parse(stored);
+    const deletedSet = getDeletedUserIdsSync();
     return parsed.filter(
-      (u) => u.id !== 'usr-admin' && u.username?.toLowerCase() !== 'admin' && u.email?.toLowerCase() !== 'admin@dailybureau.org'
+      (u) =>
+        u.id !== 'usr-admin' &&
+        u.username?.toLowerCase() !== 'admin' &&
+        u.email?.toLowerCase() !== 'admin@dailybureau.org' &&
+        (u.role as string) !== 'deleted' &&
+        !u.id.startsWith('deleted_') &&
+        !u.username?.startsWith('__deleted__') &&
+        !deletedSet.has(u.id.toLowerCase().trim()) &&
+        (!u.email || !deletedSet.has(u.email.toLowerCase().trim()))
     );
   } catch {
     return [];
@@ -255,6 +265,9 @@ export function deleteUser(userIdentifier: string): { success: boolean; error?: 
     return { success: false, error: 'Cannot delete the Chief Administrator account.' };
   }
 
+  // Trigger comprehensive complete deletion
+  deleteUserCompletely(target.id, target.email).catch(() => {});
+
   const filtered = users.filter(
     (u) => u.id !== target.id && u.username.toLowerCase() !== target.username.toLowerCase()
   );
@@ -267,9 +280,8 @@ export function deleteUser(userIdentifier: string): { success: boolean; error?: 
     setCurrentUser(null);
   }
 
-  // Sync deletion to Firebase
   if (isSupabaseConfigured) {
-    deleteCloudUser(target.id).catch(() => {/* silently ignore */});
+    deleteCloudUser(target.id).catch(() => {});
   }
 
   emitSync();

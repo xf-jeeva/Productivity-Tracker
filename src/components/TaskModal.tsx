@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Task, User, TaskPriority, ItemType } from '../types';
 import { getUsers, getCurrentUser, createTask, updateTask } from '../lib/storage';
-import { getAllProfiles } from '../lib/auth';
+import { getAllProfiles, getDeletedUserIdsSync } from '../lib/auth';
 import { useAuth } from './AuthProvider';
 import { playRubberStampSound, playTypewriterClick, playVintageBell } from '../lib/sound';
 import { X, Plus, Trash2, Stamp, Calendar, Clock, Bell, Repeat, CheckSquare, UserCheck } from 'lucide-react';
@@ -38,25 +38,33 @@ export default function TaskModal({
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
 
   useEffect(() => {
+    const deletedSet = getDeletedUserIdsSync();
     const rawLocal = getUsers().filter(
-      (u) => u.id !== 'usr-admin' && u.username?.toLowerCase() !== 'admin' && u.email?.toLowerCase() !== 'admin@dailybureau.org'
+      (u) =>
+        u.id !== 'usr-admin' &&
+        u.username?.toLowerCase() !== 'admin' &&
+        u.email?.toLowerCase() !== 'admin@dailybureau.org' &&
+        !deletedSet.has(u.id.toLowerCase().trim()) &&
+        (!u.email || !deletedSet.has(u.email.toLowerCase().trim()))
     );
     let loadedUsers: User[] = [...rawLocal];
 
     if (authUser && !loadedUsers.some((u) => u.id === authUser.id || u.email?.toLowerCase() === authUser.email.toLowerCase())) {
-      loadedUsers.unshift({
-        id: authUser.id,
-        username: authUser.email ? authUser.email.split('@')[0] : authUser.id,
-        password: '',
-        name: authUser.name,
-        email: authUser.email,
-        role: authUser.role,
-        avatar: authUser.avatarUrl || undefined,
-        title: authUser.role === 'admin' ? 'Administrator' : 'Team Member',
-        department: 'Operations',
-        deskNumber: `Desk ${authUser.id.slice(0, 4).toUpperCase()}`,
-        createdAt: new Date().toISOString(),
-      });
+      if (!deletedSet.has(authUser.id.toLowerCase().trim()) && (!authUser.email || !deletedSet.has(authUser.email.toLowerCase().trim()))) {
+        loadedUsers.unshift({
+          id: authUser.id,
+          username: authUser.email ? authUser.email.split('@')[0] : authUser.id,
+          password: '',
+          name: authUser.name,
+          email: authUser.email,
+          role: authUser.role,
+          avatar: authUser.avatarUrl || undefined,
+          title: authUser.role === 'admin' ? 'Administrator' : 'Team Member',
+          department: 'Operations',
+          deskNumber: `Desk ${authUser.id.slice(0, 4).toUpperCase()}`,
+          createdAt: new Date().toISOString(),
+        });
+      }
     }
 
     setUsers(loadedUsers);
@@ -64,30 +72,43 @@ export default function TaskModal({
     // Also pull cloud profiles to ensure newly registered Google accounts appear
     getAllProfiles().then((cloudProfiles) => {
       if (cloudProfiles && cloudProfiles.length > 0) {
-        const profileIds = new Set(cloudProfiles.map((p) => p.id));
-        const formatted: User[] = cloudProfiles
-          .filter((p) => p.id !== 'usr-admin' && p.email?.toLowerCase() !== 'admin@dailybureau.org')
-          .map((p) => {
-            const username = p.email ? p.email.split('@')[0] : p.id;
-            const existing = loadedUsers.find(
-              (u) => u.id === p.id || u.username.toLowerCase() === username.toLowerCase()
-            );
-            return {
-              id: p.id,
-              username: existing?.username || username,
-              password: '',
-              name: p.name || username,
-              email: p.email,
-              role: p.role,
-              avatar: p.avatarUrl || existing?.avatar,
-              title: existing?.title || (p.role === 'admin' ? 'Administrator' : 'Team Member'),
-              department: existing?.department || 'Operations',
-              deskNumber: existing?.deskNumber || `Desk ${p.id.slice(0, 4).toUpperCase()}`,
-              createdAt: existing?.createdAt || new Date().toISOString(),
-            };
-          });
+        const validProfiles = cloudProfiles.filter(
+          (p) =>
+            p.id !== 'usr-admin' &&
+            p.email?.toLowerCase() !== 'admin@dailybureau.org' &&
+            !deletedSet.has(p.id.toLowerCase().trim()) &&
+            (!p.email || !deletedSet.has(p.email.toLowerCase().trim()))
+        );
+        const profileIds = new Set(validProfiles.map((p) => p.id));
+        const formatted: User[] = validProfiles.map((p) => {
+          const username = p.email ? p.email.split('@')[0] : p.id;
+          const existing = loadedUsers.find(
+            (u) => u.id === p.id || u.username.toLowerCase() === username.toLowerCase()
+          );
+          return {
+            id: p.id,
+            username: existing?.username || username,
+            password: '',
+            name: p.name || username,
+            email: p.email,
+            role: p.role,
+            avatar: p.avatarUrl || existing?.avatar,
+            title: existing?.title || (p.role === 'admin' ? 'Administrator' : 'Team Member'),
+            department: existing?.department || 'Operations',
+            deskNumber: existing?.deskNumber || `Desk ${p.id.slice(0, 4).toUpperCase()}`,
+            createdAt: existing?.createdAt || new Date().toISOString(),
+          };
+        });
 
-        const merged = [...formatted, ...loadedUsers.filter((u) => !profileIds.has(u.id))];
+        const merged = [
+          ...formatted,
+          ...loadedUsers.filter(
+            (u) =>
+              !profileIds.has(u.id) &&
+              !deletedSet.has(u.id.toLowerCase().trim()) &&
+              (!u.email || !deletedSet.has(u.email.toLowerCase().trim()))
+          ),
+        ];
         setUsers(merged);
       }
     });

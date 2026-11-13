@@ -13,7 +13,7 @@ import { subscribeCloudUsers, pushCloudUsers, isSupabaseConfigured } from '../li
 import { subscribeCloudTasks, subscribeAllCloudTasks, pushCloudTask } from '../lib/cloudTasks';
 import { subscribeCloudNotes } from '../lib/cloudNotes';
 import { getUsers, getCurrentUser, BUREAU_SYNC_EVENT } from '../lib/storage';
-import { isMasterAdmin } from '../lib/auth';
+import { isMasterAdmin, getDeletedUserIdsSync } from '../lib/auth';
 import { useAuth } from './AuthProvider';
 import { Task } from '../types';
 
@@ -30,19 +30,42 @@ export default function CloudUserSync() {
     // ── 1. Users sync ────────────────────────────────────────────────────────
     const unsubscribeUsers = subscribeCloudUsers((cloudUsers) => {
       const localUsers = getUsers();
+      const deletedSet = getDeletedUserIdsSync();
 
       if (!cloudUsers || cloudUsers.length === 0) {
         // Supabase is empty — bootstrap it with current local users
         if (localUsers.length > 0) {
-          pushCloudUsers(localUsers).catch(() => {});
+          const valid = localUsers.filter(
+            (u) =>
+              u.id !== 'usr-admin' &&
+              !deletedSet.has(u.id.toLowerCase().trim()) &&
+              (!u.email || !deletedSet.has(u.email.toLowerCase().trim()))
+          );
+          pushCloudUsers(valid).catch(() => {});
         }
         return;
       }
 
-      // Merge: cloud users take precedence, exclude mock admin
-      const cloudIds = new Set(cloudUsers.map((u) => u.id));
-      const localOnly = localUsers.filter((u) => !cloudIds.has(u.id) && u.id !== 'usr-admin');
-      const merged = [...cloudUsers.filter((u) => u.id !== 'usr-admin'), ...localOnly];
+      // Filter cloud users against tombstones & deleted status
+      const validCloud = cloudUsers.filter(
+        (u) =>
+          u.id !== 'usr-admin' &&
+          (u.role as string) !== 'deleted' &&
+          !u.id.startsWith('deleted_') &&
+          !deletedSet.has(u.id.toLowerCase().trim()) &&
+          (!u.email || !deletedSet.has(u.email.toLowerCase().trim()))
+      );
+
+      // Merge: cloud users take precedence, exclude mock admin & deleted
+      const cloudIds = new Set(validCloud.map((u) => u.id));
+      const localOnly = localUsers.filter(
+        (u) =>
+          !cloudIds.has(u.id) &&
+          u.id !== 'usr-admin' &&
+          !deletedSet.has(u.id.toLowerCase().trim()) &&
+          (!u.email || !deletedSet.has(u.email.toLowerCase().trim()))
+      );
+      const merged = [...validCloud, ...localOnly];
 
       try {
         localStorage.setItem(USERS_KEY, JSON.stringify(merged));
