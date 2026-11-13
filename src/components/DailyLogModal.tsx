@@ -127,7 +127,7 @@ export default function DailyLogModal({ isOpen, onClose }: DailyLogModalProps) {
                 marginTop: '0.15rem',
               }}
             >
-              File Daily Work & Standup Dispatch
+              Submit Daily Work & Standup Log
             </h2>
           </div>
 

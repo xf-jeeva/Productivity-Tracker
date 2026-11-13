@@ -123,7 +123,7 @@ export default function TaskCard({ task, onEdit, showAssignee = true }: TaskCard
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm(`Move Dispatch Order № ${task.orderNumber} to Deleted archive?`)) {
+    if (confirm(`Move task #${task.orderNumber} to Deleted archive?`)) {
       playTypewriterClick();
       deleteTask(task.id, effectiveUsername);
     }
@@ -137,7 +137,7 @@ export default function TaskCard({ task, onEdit, showAssignee = true }: TaskCard
 
   const handlePermanentDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm(`Permanently purge Dispatch Order № ${task.orderNumber}? This will remove it completely from your desk and the Bureau cloud database.`)) {
+    if (confirm(`Permanently delete task #${task.orderNumber}? This will remove it completely from the database.`)) {
       playTypewriterClick();
       permanentDeleteTask(task.id);
     }
@@ -208,7 +208,7 @@ export default function TaskCard({ task, onEdit, showAssignee = true }: TaskCard
               letterSpacing: '0.06em',
             }}
           >
-            DISPATCH № {task.orderNumber}
+            TASK #{task.orderNumber}
           </span>
           <span style={{ color: 'var(--ink-faint)' }}>•</span>
 
@@ -337,7 +337,7 @@ export default function TaskCard({ task, onEdit, showAssignee = true }: TaskCard
               {task.adminSignedOff && (
                 <RubberStamp
                   type="approved"
-                  text="CHIEF SEAL"
+                  text="ADMIN SEAL"
                   subtext="VERIFIED"
                 />
               )}

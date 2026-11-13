@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { AuthUser, getAuthUser, onAuthStateChange, hasLocalAuthSession } from '../lib/auth';
+import { AuthUser, getAuthUser, onAuthStateChange, hasLocalAuthSession, getCachedAuthUser } from '../lib/auth';
 import { setCurrentUser, getUsers } from '../lib/storage';
 import { User } from '../types';
 
@@ -32,9 +32,9 @@ function syncAuthUserToStorage(u: AuthUser | null) {
     email: u.email,
     role: u.role,
     avatar: u.avatarUrl || undefined,
-    title: u.role === 'admin' ? 'Chief Bureau Administrator' : 'Field Operative',
-    department: 'Dispatch & Logistics',
-    deskNumber: `DK-${u.id.slice(0, 4).toUpperCase()}`,
+    title: u.role === 'admin' ? 'Administrator' : 'Team Member',
+    department: 'Operations',
+    deskNumber: `Desk ${u.id.slice(0, 4).toUpperCase()}`,
     createdAt: new Date().toISOString(),
   };
 
@@ -50,6 +50,7 @@ function syncAuthUserToStorage(u: AuthUser | null) {
       avatar: mappedUser.avatar || users[existingIdx].avatar,
       role: u.role,
       email: u.email,
+      title: mappedUser.title,
     };
     localStorage.setItem('daily_bureau_users_v3', JSON.stringify(users));
   } else {
@@ -60,27 +61,15 @@ function syncAuthUserToStorage(u: AuthUser | null) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    if (typeof window === 'undefined') return null;
-    try {
-      const stored = localStorage.getItem('daily_bureau_current_user_v3');
-      if (stored) {
-        const u = JSON.parse(stored);
-        if (u?.id && u?.email) {
-          return {
-            id: u.id,
-            email: u.email,
-            name: u.name || u.email.split('@')[0],
-            avatarUrl: u.avatar || null,
-            role: u.role || 'member',
-          };
-        }
-      }
-    } catch {}
-    return null;
+  // Synchronous 0ms cached user lookup
+  const [user, setUser] = useState<AuthUser | null>(() => getCachedAuthUser());
+  // If we already have a cached user, loading is false immediately — no blank screen or waiting!
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const cached = getCachedAuthUser();
+    if (cached) return false;
+    return hasLocalAuthSession();
   });
-  // If no auth token in localStorage, we know immediately that the user is not signed in
-  const [loading, setLoading] = useState(() => hasLocalAuthSession());
 
   const applyUser = (u: AuthUser | null) => {
     setUser(u);
@@ -93,12 +82,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    // If no session exists in localStorage, we are already not loading
     if (!hasLocalAuthSession()) {
       setLoading(false);
       return;
     }
 
-    // Initial load
+    // Silent background load/refresh
     getAuthUser().then((u) => {
       applyUser(u);
       setLoading(false);

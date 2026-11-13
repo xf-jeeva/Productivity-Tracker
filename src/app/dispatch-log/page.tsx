@@ -67,13 +67,13 @@ export default function DispatchLogPage() {
                 letterSpacing: '0.08em',
               }}
             >
-              The Daily Dispatch Archive • Shift Standups
+              Daily Work Logs • Team Standups
             </div>
             <h2 className="serif-display" style={{ fontSize: '1.8rem', fontWeight: 800 }}>
-              Chronological Daily Work Logs
+              Daily Activity Logs
             </h2>
             <p style={{ fontSize: '0.82rem', color: 'var(--ink-secondary)', marginTop: '0.15rem' }}>
-              Historical archive of daily work submissions, accomplishments, and next-day agendas filed by team members.
+              Archive of daily work submissions, accomplishments, and next-day agendas filed by team members.
             </p>
           </div>
 
@@ -82,20 +82,20 @@ export default function DispatchLogPage() {
               href="/"
               className="btn-parchment"
               style={{ padding: '0.55rem 0.85rem', fontSize: '0.78rem' }}
-              title="Go to My Work Desk"
+              title="Go to My Tasks"
             >
               <CheckSquare size={14} style={{ color: 'var(--brass-gold)' }} />
-              <span>My Work Desk</span>
+              <span>My Tasks</span>
             </Link>
 
             <Link
               href="/team"
               className="btn-parchment"
               style={{ padding: '0.55rem 0.85rem', fontSize: '0.78rem' }}
-              title="Go to Team Roster"
+              title="Go to Team"
             >
               <Users size={14} style={{ color: 'var(--stamp-blue)' }} />
-              <span>Team Roster</span>
+              <span>Team</span>
             </Link>
 
             {isMasterAdmin(authUser?.email || currentUser?.email) && (
@@ -103,10 +103,10 @@ export default function DispatchLogPage() {
                 href="/admin"
                 className="btn-parchment"
                 style={{ padding: '0.55rem 0.85rem', fontSize: '0.78rem' }}
-                title="Go to Admin Oversight"
+                title="Go to Admin Dashboard"
               >
                 <ShieldCheck size={14} style={{ color: 'var(--stamp-red)' }} />
-                <span>Admin Oversight</span>
+                <span>Admin Dashboard</span>
               </Link>
             )}
 
@@ -119,7 +119,7 @@ export default function DispatchLogPage() {
               style={{ padding: '0.55rem 1rem', fontSize: '0.78rem' }}
             >
               <Feather size={15} />
-              <span>File My Daily Standup</span>
+              <span>Submit Daily Standup</span>
             </button>
           </div>
         </div>

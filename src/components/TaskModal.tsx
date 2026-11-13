@@ -3,18 +3,26 @@
 import React, { useState, useEffect } from 'react';
 import { Task, User, TaskPriority, ItemType } from '../types';
 import { getUsers, getCurrentUser, createTask, updateTask } from '../lib/storage';
+import { getAllProfiles } from '../lib/auth';
 import { useAuth } from './AuthProvider';
 import { playRubberStampSound, playTypewriterClick, playVintageBell } from '../lib/sound';
-import { X, Plus, Trash2, Stamp, Calendar, Clock, Bell, Repeat, CheckSquare } from 'lucide-react';
+import { X, Plus, Trash2, Stamp, Calendar, Clock, Bell, Repeat, CheckSquare, UserCheck } from 'lucide-react';
 
 interface TaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   taskToEdit?: Task | null;
   defaultType?: ItemType;
+  defaultAssigneeId?: string;
 }
 
-export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = 'task' }: TaskModalProps) {
+export default function TaskModal({
+  isOpen,
+  onClose,
+  taskToEdit,
+  defaultType = 'task',
+  defaultAssigneeId,
+}: TaskModalProps) {
   const { user: authUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [itemType, setItemType] = useState<ItemType>(defaultType);
@@ -22,7 +30,7 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
   const [description, setDescription] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
   const [priority, setPriority] = useState<TaskPriority>('routine');
-  const [category, setCategory] = useState('Atelier & Craft');
+  const [category, setCategory] = useState('General Work');
   const [reminderTime, setReminderTime] = useState('');
   const [estimatedHours, setEstimatedHours] = useState(2.0);
   const [dueDate, setDueDate] = useState('');
@@ -30,8 +38,12 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
 
   useEffect(() => {
-    const loadedUsers = getUsers();
-    if (authUser && !loadedUsers.some((u) => u.id === authUser.id)) {
+    const rawLocal = getUsers().filter(
+      (u) => u.id !== 'usr-admin' && u.username?.toLowerCase() !== 'admin' && u.email?.toLowerCase() !== 'admin@dailybureau.org'
+    );
+    let loadedUsers: User[] = [...rawLocal];
+
+    if (authUser && !loadedUsers.some((u) => u.id === authUser.id || u.email?.toLowerCase() === authUser.email.toLowerCase())) {
       loadedUsers.unshift({
         id: authUser.id,
         username: authUser.email ? authUser.email.split('@')[0] : authUser.id,
@@ -40,21 +52,53 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
         email: authUser.email,
         role: authUser.role,
         avatar: authUser.avatarUrl || undefined,
-        title: authUser.role === 'admin' ? 'Chief Bureau Administrator' : 'Field Operative',
-        department: 'Dispatch & Logistics',
-        deskNumber: `DK-${authUser.id.slice(0, 4).toUpperCase()}`,
+        title: authUser.role === 'admin' ? 'Administrator' : 'Team Member',
+        department: 'Operations',
+        deskNumber: `Desk ${authUser.id.slice(0, 4).toUpperCase()}`,
         createdAt: new Date().toISOString(),
       });
     }
+
     setUsers(loadedUsers);
+
+    // Also pull cloud profiles to ensure newly registered Google accounts appear
+    getAllProfiles().then((cloudProfiles) => {
+      if (cloudProfiles && cloudProfiles.length > 0) {
+        const profileIds = new Set(cloudProfiles.map((p) => p.id));
+        const formatted: User[] = cloudProfiles
+          .filter((p) => p.id !== 'usr-admin' && p.email?.toLowerCase() !== 'admin@dailybureau.org')
+          .map((p) => {
+            const username = p.email ? p.email.split('@')[0] : p.id;
+            const existing = loadedUsers.find(
+              (u) => u.id === p.id || u.username.toLowerCase() === username.toLowerCase()
+            );
+            return {
+              id: p.id,
+              username: existing?.username || username,
+              password: '',
+              name: p.name || username,
+              email: p.email,
+              role: p.role,
+              avatar: p.avatarUrl || existing?.avatar,
+              title: existing?.title || (p.role === 'admin' ? 'Administrator' : 'Team Member'),
+              department: existing?.department || 'Operations',
+              deskNumber: existing?.deskNumber || `Desk ${p.id.slice(0, 4).toUpperCase()}`,
+              createdAt: existing?.createdAt || new Date().toISOString(),
+            };
+          });
+
+        const merged = [...formatted, ...loadedUsers.filter((u) => !profileIds.has(u.id))];
+        setUsers(merged);
+      }
+    });
 
     if (taskToEdit) {
       setItemType(taskToEdit.itemType || 'task');
       setTitle(taskToEdit.title);
       setDescription(taskToEdit.description || '');
-      setAssigneeId(taskToEdit.assigneeId);
+      setAssigneeId(taskToEdit.assigneeId || defaultAssigneeId || authUser?.id || '');
       setPriority(taskToEdit.priority);
-      setCategory(taskToEdit.category);
+      setCategory(taskToEdit.category || 'General Work');
       setReminderTime(taskToEdit.reminderTime || '');
       setEstimatedHours(taskToEdit.estimatedHours || 2.0);
       setDueDate(taskToEdit.dueDate);
@@ -64,19 +108,20 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
       setItemType(defaultType);
       setTitle('');
       setDescription('');
-      setAssigneeId(authUser?.id || current?.id || loadedUsers[0]?.id || '');
+      const targetAssignee = defaultAssigneeId || authUser?.id || current?.id || loadedUsers[0]?.id || '';
+      setAssigneeId(targetAssignee);
       setPriority('routine');
-      setCategory('Atelier & Craft');
+      setCategory('General Work');
       setReminderTime('');
       setEstimatedHours(2.0);
-      
+
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       setDueDate(tomorrow.toISOString().split('T')[0]);
       setSubtasks([]);
     }
     setNewSubtaskTitle('');
-  }, [isOpen, taskToEdit, defaultType, authUser]);
+  }, [isOpen, taskToEdit, defaultType, defaultAssigneeId, authUser]);
 
   if (!isOpen) return null;
 
@@ -149,11 +194,11 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
   };
 
   const categories = [
-    'Atelier & Craft',
-    'Systems & Engineering',
-    'Archives & Research',
-    'Dispatch & Logistics',
-    'Mechanics & Precision',
+    'General Work',
+    'Engineering & Tech',
+    'Design & Creative',
+    'Operations & Planning',
+    'Review & Testing',
   ];
 
   return (
@@ -186,7 +231,7 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Masthead */}
+        {/* Modal Header */}
         <div
           style={{
             display: 'flex',
@@ -208,7 +253,7 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
                 textTransform: 'uppercase',
               }}
             >
-              Dispatch Docket • {itemType === 'routine' ? 'Daily Routine Ritual' : 'Daily Work Task'}
+              {itemType === 'routine' ? 'Daily Routine' : 'Daily Task'}
             </div>
             <h2
               className="serif-display"
@@ -219,7 +264,9 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
                 marginTop: '0.15rem',
               }}
             >
-              {taskToEdit ? `Edit ${itemType === 'routine' ? 'Routine' : 'Task'} № ${taskToEdit.orderNumber}` : `Commission New ${itemType === 'routine' ? 'Daily Routine' : 'Daily Task'}`}
+              {taskToEdit
+                ? `Edit ${itemType === 'routine' ? 'Routine' : 'Task'} #${taskToEdit.orderNumber}`
+                : `Create New ${itemType === 'routine' ? 'Daily Routine' : 'Daily Task'}`}
             </h2>
           </div>
 
@@ -234,7 +281,7 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
 
         {/* Section Selector: Daily Task vs Daily Routine */}
         <div style={{ marginBottom: '1.25rem' }}>
-          <label className="vintage-label">Docket Classification *</label>
+          <label className="vintage-label">Item Type *</label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
             <button
               type="button"
@@ -243,10 +290,10 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
                 setItemType('task');
               }}
               className={itemType === 'task' ? 'btn-brass' : 'btn-parchment'}
-              style={{ padding: '0.65rem 1rem', fontSize: '0.8rem', justifyContent: 'center' }}
+              style={{ padding: '0.65rem 1rem', fontSize: '0.82rem', justifyContent: 'center' }}
             >
               <CheckSquare size={15} />
-              <span>Daily Task (Work Order)</span>
+              <span>Daily Task</span>
             </button>
 
             <button
@@ -256,10 +303,10 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
                 setItemType('routine');
               }}
               className={itemType === 'routine' ? 'btn-brass' : 'btn-parchment'}
-              style={{ padding: '0.65rem 1rem', fontSize: '0.8rem', justifyContent: 'center' }}
+              style={{ padding: '0.65rem 1rem', fontSize: '0.82rem', justifyContent: 'center' }}
             >
               <Repeat size={15} />
-              <span>Daily Routine (Habit / Ritual)</span>
+              <span>Daily Routine</span>
             </button>
           </div>
         </div>
@@ -269,31 +316,54 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
           {/* Title */}
           <div style={{ marginBottom: '1rem' }}>
             <label className="vintage-label">
-              {itemType === 'routine' ? 'Routine Name / Workstation Habit *' : 'Task Specification Title *'}
+              {itemType === 'routine' ? 'Routine Title *' : 'Task Title *'}
             </label>
             <input
               type="text"
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder={itemType === 'routine' ? 'e.g. Morning lathe oiling & calibration check' : 'e.g. Calibrate astronomical escapement balance'}
+              placeholder={itemType === 'routine' ? 'e.g. Morning team sync & plan' : 'e.g. Complete customer portal integration'}
               className="vintage-input"
             />
           </div>
 
+          {/* Assign To (Allows Admin and Members to assign to anyone) */}
+          <div style={{ marginBottom: '1rem' }}>
+            <label className="vintage-label">
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                <UserCheck size={14} style={{ color: 'var(--brass-dark)' }} />
+                Assign To *
+              </span>
+            </label>
+            <select
+              value={assigneeId}
+              onChange={(e) => setAssigneeId(e.target.value)}
+              className="vintage-input"
+              style={{ fontWeight: 600 }}
+              required
+            >
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name} ({u.email || u.username}) {u.role === 'admin' ? '★ Admin' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Description */}
           <div style={{ marginBottom: '1rem' }}>
-            <label className="vintage-label">Directives & Notes</label>
+            <label className="vintage-label">Description & Instructions</label>
             <textarea
               rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Instructions or notes for this item..."
+              placeholder="Detailed notes or instructions for this item..."
               className="vintage-textarea"
             />
           </div>
 
-          {/* Work Assign / Reminder Time Row */}
+          {/* Reminder Alert Time */}
           <div
             style={{
               backgroundColor: 'var(--bg-parchment)',
@@ -306,10 +376,10 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div>
                 <label className="vintage-label" style={{ marginBottom: '0.15rem', color: 'var(--brass-dark)' }}>
-                  Work Assign / Reminder Time (Website Notification)
+                  Reminder Alert Time (Browser Notification)
                 </label>
-                <div style={{ fontSize: '0.72rem', color: 'var(--ink-secondary)' }}>
-                  Website alerts you with a chime & notification at this exact scheduled time
+                <div style={{ fontSize: '0.74rem', color: 'var(--ink-secondary)' }}>
+                  The app alerts you with sound and notification at this scheduled time
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.35rem' }}>
@@ -340,7 +410,7 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
                     className="btn-parchment"
                     style={{ fontSize: '0.66rem', padding: '0.15rem 0.45rem', color: 'var(--brass-dark)' }}
                   >
-                    <span>🔔 Allow Desktop Alerts</span>
+                    <span>🔔 Enable Desktop Alerts</span>
                   </button>
                 )}
               </div>
@@ -357,20 +427,20 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
             }}
           >
             <div>
-              <label className="vintage-label">Urgency Seal</label>
+              <label className="vintage-label">Priority</label>
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as TaskPriority)}
                 className="vintage-input"
               >
-                <option value="routine">Routine Docket</option>
-                <option value="urgent">Urgent Dispatch</option>
-                <option value="opus">Priority Opus (Crucial)</option>
+                <option value="routine">Normal Priority</option>
+                <option value="urgent">Urgent Priority</option>
+                <option value="opus">High Priority</option>
               </select>
             </div>
 
             <div>
-              <label className="vintage-label">Department / Category</label>
+              <label className="vintage-label">Category</label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
@@ -395,7 +465,7 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
             }}
           >
             <div>
-              <label className="vintage-label">Scheduled Date</label>
+              <label className="vintage-label">Due Date</label>
               <input
                 type="date"
                 required
@@ -430,7 +500,7 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
             }}
           >
             <label className="vintage-label" style={{ marginBottom: '0.65rem' }}>
-              Checklist Sub-Steps ({subtasks.length} Defined)
+              Subtasks Checklist ({subtasks.length} Defined)
             </label>
 
             {subtasks.length > 0 && (
@@ -483,7 +553,7 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
                     handleAddSubtask();
                   }
                 }}
-                placeholder="Add step (e.g. Check hydraulic reservoir)..."
+                placeholder="Add subtask step..."
                 className="vintage-input"
                 style={{ flex: 1 }}
               />
@@ -521,7 +591,11 @@ export default function TaskModal({ isOpen, onClose, taskToEdit, defaultType = '
               className="btn-brass"
             >
               <Stamp size={15} />
-              <span>{taskToEdit ? 'Save Revisions' : `Commission ${itemType === 'routine' ? 'Routine' : 'Task'}`}</span>
+              <span>
+                {taskToEdit
+                  ? 'Save Changes'
+                  : `Create ${itemType === 'routine' ? 'Routine' : 'Task'}`}
+              </span>
             </button>
           </div>
         </form>

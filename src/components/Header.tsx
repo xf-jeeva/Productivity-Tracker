@@ -105,11 +105,11 @@ export default function Header({ onOpenNewTaskModal }: HeaderProps) {
   };
 
   const navLinks = [
-    { href: '/', label: 'My Work Desk', icon: CheckSquare, badge: 'Desk' },
-    { href: '/team', label: 'Team Roster', icon: Users, badge: 'Personnel' },
-    { href: '/dispatch-log', label: 'Dispatch Ledger', icon: BookOpen, badge: 'Ledger' },
+    { href: '/', label: 'My Tasks', icon: CheckSquare, badge: 'Tasks' },
+    { href: '/team', label: 'Team', icon: Users, badge: 'Members' },
+    { href: '/dispatch-log', label: 'Activity Log', icon: BookOpen, badge: 'Logs' },
     ...(isAdmin
-      ? [{ href: '/admin', label: 'Admin Oversight', icon: ShieldCheck, badge: '★ Admin', adminOnly: true }]
+      ? [{ href: '/admin', label: 'Admin Dashboard', icon: ShieldCheck, badge: '★ Admin', adminOnly: true }]
       : []),
   ];
 
@@ -140,10 +140,10 @@ export default function Header({ onOpenNewTaskModal }: HeaderProps) {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
           <span className="typewriter-text" style={{ fontWeight: 700, letterSpacing: '0.08em' }}>
-            REGISTRY FOLIO № 894-B
+            DAILY BUREAU
           </span>
           <span style={{ color: 'var(--ink-faint)' }}>•</span>
-          <span style={{ letterSpacing: '0.04em' }}>CONFIDENTIAL TEAM DISPATCH</span>
+          <span style={{ letterSpacing: '0.04em' }}>PRODUCTIVITY TRACKER & TEAM WORKSPACE</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
@@ -250,7 +250,7 @@ export default function Header({ onOpenNewTaskModal }: HeaderProps) {
                 textOverflow: 'ellipsis',
               }}
             >
-              The Daily Bureau
+              Daily Bureau
             </h1>
             <p
               className="typewriter-text brand-sub-text"
@@ -265,7 +265,7 @@ export default function Header({ onOpenNewTaskModal }: HeaderProps) {
                 textOverflow: 'ellipsis',
               }}
             >
-              Team Work Tracker & Ledger
+              Productivity Tracker & Team Workspace
             </p>
           </div>
         </Link>
@@ -593,7 +593,7 @@ export default function Header({ onOpenNewTaskModal }: HeaderProps) {
                   style={{ width: '100%', padding: '0.65rem', justifyContent: 'center', fontSize: '0.8rem' }}
                 >
                   <PlusCircle size={15} />
-                  <span>+ Commission New Work Order</span>
+                  <span>+ New Task</span>
                 </button>
               )}
 

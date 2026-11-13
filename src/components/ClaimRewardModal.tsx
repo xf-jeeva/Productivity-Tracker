@@ -117,7 +117,7 @@ export default function ClaimRewardModal({ isOpen, onClose }: ClaimRewardModalPr
       disableForReducedMotion: true,
     });
 
-    setSuccessMsg(`Requisition № ${res.claim?.claimNumber} successfully filed! ₹${res.claim?.rupeeAmount}.00 will be disbursed by the Bureau Treasury.`);
+    setSuccessMsg(`Reward claim #${res.claim?.claimNumber} successfully submitted! ₹${res.claim?.rupeeAmount}.00 will be reviewed and disbursed.`);
     setPayoutDetails('');
     setTokensToRedeem(MIN_REDEEM_TOKENS);
     syncData();
@@ -201,7 +201,7 @@ export default function ClaimRewardModal({ isOpen, onClose }: ClaimRewardModalPr
                 letterSpacing: '0.08em',
               }}
             >
-              The Daily Bureau • Treasury & Cashier Folio
+              Daily Bureau • Rewards & Token Cashout
             </div>
             <h2 className="serif-display" style={{ fontSize: '1.65rem', fontWeight: 800, margin: '0.15rem 0 0' }}>
               Claim Rewards & Token Cashout

@@ -2,8 +2,7 @@
 
 // OAuth Callback Page
 // Supabase redirects here after Google login completes.
-// This page processes both PKCE auth code and implicit hash tokens,
-// writes the active user session directly into local cache, and redirects to /.
+// Fast session resolution and instant redirect to dashboard.
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -11,10 +10,10 @@ import { getAuthUser } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { setCurrentUser, getUsers } from '@/lib/storage';
 import { User } from '@/types';
-import { ShieldAlert, CheckCircle2, RotateCcw } from 'lucide-react';
+import { ShieldAlert, RotateCcw } from 'lucide-react';
 
 export default function AuthCallbackPage() {
-  const [status, setStatus] = useState('Verifying clearance credentials...');
+  const [status, setStatus] = useState('Verifying credentials...');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -22,7 +21,7 @@ export default function AuthCallbackPage() {
 
     const processCallback = async () => {
       if (!supabase) {
-        setErrorMessage('Supabase client is not configured.');
+        setErrorMessage('Database connection is not configured.');
         return;
       }
 
@@ -41,7 +40,7 @@ export default function AuthCallbackPage() {
           hashParams.get('error');
 
         if (errorDesc) {
-          console.error('OAuth redirect returned error:', errorDesc);
+          console.error('OAuth redirect error:', errorDesc);
           if (active) {
             setErrorMessage(`Authentication error: ${errorDesc.replace(/\+/g, ' ')}`);
           }
@@ -51,7 +50,7 @@ export default function AuthCallbackPage() {
         // 1. Check for PKCE authorization code in query string
         const code = url.searchParams.get('code');
         if (code) {
-          setStatus('Exchanging authorization code for session...');
+          setStatus('Establishing secure session...');
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
           if (exchangeError) {
             console.warn('exchangeCodeForSession note:', exchangeError.message);
@@ -62,7 +61,7 @@ export default function AuthCallbackPage() {
         const accessToken = hashParams.get('access_token');
         const refreshToken = hashParams.get('refresh_token');
         if (accessToken && refreshToken) {
-          setStatus('Restoring access token credentials...');
+          setStatus('Restoring credentials...');
           await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
@@ -72,9 +71,8 @@ export default function AuthCallbackPage() {
         // 3. Verify that an active session exists
         let session = (await supabase.auth.getSession()).data.session;
         if (!session) {
-          // Poll up to 4 seconds for session to stabilize
-          for (let i = 0; i < 8; i++) {
-            await new Promise((resolve) => setTimeout(resolve, 500));
+          for (let i = 0; i < 6; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 300));
             if (!active) return;
             const check = await supabase.auth.getSession();
             if (check.data.session) {
@@ -84,18 +82,18 @@ export default function AuthCallbackPage() {
           }
         }
 
-        setStatus('Retrieving officer clearance profile...');
+        setStatus('Loading profile...');
         const user = await getAuthUser();
 
         if (!user) {
           console.warn('No user session resolved after callback.');
           if (active) {
-            setErrorMessage('Unable to establish verified session. Please try logging in again.');
+            setErrorMessage('Unable to establish verified session. Please try signing in again.');
           }
           return;
         }
 
-        // 4. Force-save to local bureau storage so My Work Desk has instant access
+        // 4. Force-save to local storage so My Tasks has instant access
         const username = user.email ? user.email.split('@')[0] : user.id;
         const mappedUser: User = {
           id: user.id,
@@ -105,9 +103,9 @@ export default function AuthCallbackPage() {
           email: user.email,
           role: user.role,
           avatar: user.avatarUrl || undefined,
-          title: user.role === 'admin' ? 'Chief Bureau Administrator' : 'Field Operative',
-          department: 'Dispatch & Logistics',
-          deskNumber: `DK-${user.id.slice(0, 4).toUpperCase()}`,
+          title: user.role === 'admin' ? 'Administrator' : 'Team Member',
+          department: 'Operations',
+          deskNumber: `Desk ${user.id.slice(0, 4).toUpperCase()}`,
           createdAt: new Date().toISOString(),
         };
 
@@ -123,6 +121,7 @@ export default function AuthCallbackPage() {
             avatar: mappedUser.avatar || users[existingIdx].avatar,
             role: user.role,
             email: user.email,
+            title: mappedUser.title,
           };
           localStorage.setItem('daily_bureau_users_v3', JSON.stringify(users));
         } else {
@@ -132,12 +131,12 @@ export default function AuthCallbackPage() {
         setCurrentUser(mappedUser);
 
         if (!active) return;
-        setStatus(`Clearance Approved. Welcome, ${user.name}!`);
+        setStatus(`Sign-in approved. Welcome, ${user.name}!`);
 
-        // Clean redirection to the main desk
+        // Fast redirection
         setTimeout(() => {
           window.location.replace('/');
-        }, 400);
+        }, 150);
       } catch (err: unknown) {
         console.error('Callback error:', err);
         if (active) {
@@ -169,7 +168,7 @@ export default function AuthCallbackPage() {
     >
       <img
         src="/bureau_crest.jpg"
-        alt="The Daily Bureau"
+        alt="Daily Bureau"
         style={{ width: '64px', height: '64px', borderRadius: '50%', border: '2px solid #d4a853' }}
       />
 
@@ -185,7 +184,7 @@ export default function AuthCallbackPage() {
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: 'var(--stamp-red)', marginBottom: '0.75rem' }}>
             <ShieldAlert size={24} />
-            <span className="typewriter-text" style={{ fontWeight: 700, letterSpacing: '0.08em' }}>VERIFICATION FAILED</span>
+            <span className="typewriter-text" style={{ fontWeight: 700, letterSpacing: '0.08em' }}>SIGN-IN FAILED</span>
           </div>
           <p style={{ fontSize: '0.85rem', color: 'var(--ink-secondary)', marginBottom: '1.5rem', lineHeight: 1.5 }}>
             {errorMessage}
@@ -196,7 +195,7 @@ export default function AuthCallbackPage() {
             style={{ padding: '0.6rem 1.25rem', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
           >
             <RotateCcw size={15} />
-            <span>Return to Login Desk</span>
+            <span>Return to Sign In</span>
           </Link>
         </div>
       ) : (

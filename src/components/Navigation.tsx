@@ -17,19 +17,19 @@ export default function Navigation() {
   const navItems = [
     {
       href: '/',
-      label: 'My Work Desk',
+      label: 'My Tasks',
       icon: CheckSquare,
-      badge: user ? `@${user.email ? user.email.split('@')[0] : user.name}` : 'Workstation',
+      badge: user ? `@${user.email ? user.email.split('@')[0] : user.name}` : 'Tasks',
     },
     {
       href: '/team',
-      label: 'Team Roster',
+      label: 'Team',
       icon: Users,
-      badge: 'Personnel',
+      badge: 'Members',
     },
     {
       href: '/dispatch-log',
-      label: 'Dispatch Ledger',
+      label: 'Activity Log',
       icon: BookOpen,
       badge: 'Logs',
     },
@@ -37,7 +37,7 @@ export default function Navigation() {
       ? [
           {
             href: '/admin',
-            label: 'Admin Oversight',
+            label: 'Admin Dashboard',
             icon: ShieldCheck,
             badge: 'Admin Access',
             adminOnly: true,
@@ -78,35 +78,34 @@ export default function Navigation() {
                 alignItems: 'center',
                 gap: '0.5rem',
                 padding: '0.75rem 1.1rem',
-                fontSize: '0.84rem',
-                fontWeight: isActive ? 700 : 500,
-                color: isActive ? 'var(--ink-primary)' : 'var(--ink-secondary)',
-                borderBottom: isActive ? '3px solid var(--brass-gold)' : '3px solid transparent',
                 textDecoration: 'none',
-                transition: 'all 0.15s ease',
-                position: 'relative',
-                whiteSpace: 'nowrap',
+                color: isActive ? 'var(--brass-dark)' : 'var(--ink-secondary)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.82rem',
+                fontWeight: isActive ? 700 : 500,
+                borderBottom: isActive ? '3px solid var(--brass-gold)' : '3px solid transparent',
                 backgroundColor: isActive ? 'var(--bg-card)' : 'transparent',
+                transition: 'all 0.15s ease',
+                whiteSpace: 'nowrap',
               }}
             >
               <Icon
                 size={16}
                 style={{
-                  color: isActive ? 'var(--brass-gold)' : 'var(--ink-muted)',
+                  color: isActive ? 'var(--brass-dark)' : 'var(--ink-muted)',
                 }}
               />
               <span>{item.label}</span>
+
               {item.badge && (
                 <span
-                  className="typewriter-text"
                   style={{
-                    fontSize: '0.62rem',
+                    fontSize: '0.65rem',
                     padding: '0.1rem 0.4rem',
-                    backgroundColor: isActive ? 'var(--brass-glow)' : 'var(--bg-parchment-deep)',
-                    color: item.adminOnly && !isAdmin ? 'var(--stamp-red)' : isActive ? 'var(--brass-dark)' : 'var(--ink-muted)',
                     borderRadius: '2px',
-                    border: '1px solid var(--border-sepia)',
-                    fontWeight: 700,
+                    backgroundColor: isActive ? 'var(--brass-glow)' : 'var(--bg-parchment-deep)',
+                    color: isActive ? 'var(--brass-dark)' : 'var(--ink-muted)',
+                    letterSpacing: '0.04em',
                   }}
                 >
                   {item.badge}

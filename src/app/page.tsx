@@ -44,8 +44,11 @@ export default function MyDeskPage() {
   const router = useRouter();
   const { user: authUser, loading: authLoading } = useAuth();
   const [localUser, setLocalUser] = useState(() => getCurrentUser());
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [tasks, setTasks] = useState<Task[]>(() => {
+    if (typeof window === 'undefined') return [];
+    return getTasks();
+  });
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const handleSync = () => setLocalUser(getCurrentUser());
@@ -224,7 +227,7 @@ export default function MyDeskPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '50vh' }}>
         <div style={{ textAlign: 'center' }}>
           <div className="typewriter-text" style={{ fontSize: '0.85rem', color: 'var(--ink-secondary)', letterSpacing: '0.1em' }}>
-            LOADING WORKSTATION...
+            LOADING TASKS...
           </div>
         </div>
       </div>
@@ -233,7 +236,7 @@ export default function MyDeskPage() {
 
   return (
     <div>
-      {/* Workstation Masthead */}
+      {/* Workspace Masthead */}
       <div
         className="vintage-paper"
         style={{
@@ -277,7 +280,7 @@ export default function MyDeskPage() {
                   textTransform: 'uppercase',
                 }}
               >
-                @{currentUser.email ? currentUser.email.split('@')[0] : currentUser.name} • {isMasterAdmin(currentUser.email) ? 'BUREAU ADMINISTRATOR' : 'TEAM MEMBER'}
+                @{currentUser.email ? currentUser.email.split('@')[0] : currentUser.name} • {isMasterAdmin(currentUser.email) ? 'ADMINISTRATOR' : 'TEAM MEMBER'}
               </div>
               <h2
                 className="serif-display"
@@ -288,10 +291,10 @@ export default function MyDeskPage() {
                   lineHeight: 1.2,
                 }}
               >
-                {currentUser.name}’s Daily Dispatch Desk
+                {currentUser.name}’s Tasks & Workspace
               </h2>
               <p style={{ fontSize: '0.82rem', color: 'var(--ink-secondary)', marginTop: '0.15rem' }}>
-                Manage both your Daily Tasks & Daily Routines with scheduled reminder alerts.
+                Manage your Daily Tasks & Daily Routines with scheduled reminder alerts.
               </p>
             </div>
           </div>
@@ -440,7 +443,7 @@ export default function MyDeskPage() {
             {myDailyRoutines.length}
           </div>
           <div style={{ fontSize: '0.72rem', color: 'var(--ink-secondary)' }}>
-            Recurring daily workstation rituals
+            Recurring daily routines
           </div>
         </div>
 
@@ -467,7 +470,7 @@ export default function MyDeskPage() {
               justifyContent: 'space-between',
             }}
           >
-            <span>Completed Archive</span>
+            <span>Completed Tasks</span>
             <CheckCircle2 size={14} style={{ color: 'var(--stamp-green)' }} />
           </div>
           <div
@@ -482,7 +485,7 @@ export default function MyDeskPage() {
             {myCompletedItems.length}
           </div>
           <div style={{ fontSize: '0.72rem', color: 'var(--ink-secondary)' }}>
-            Saved separately in Stamped Folio
+            Saved in Completed Tasks
           </div>
         </div>
 
@@ -521,7 +524,7 @@ export default function MyDeskPage() {
             {myItems.filter((t) => t.reminderTime && t.status !== 'completed' && t.status !== 'deleted').length}
           </div>
           <div style={{ fontSize: '0.72rem', color: 'var(--ink-secondary)' }}>
-            Active telegraph alerts scheduled
+            Active alerts scheduled
           </div>
         </div>
       </div>
@@ -551,7 +554,7 @@ export default function MyDeskPage() {
             style={{ padding: '0.45rem 0.85rem', fontSize: '0.76rem' }}
           >
             <CheckSquare size={13} />
-            <span>Active Desk ({myDailyTasks.length + myDailyRoutines.length})</span>
+            <span>Active Tasks ({myDailyTasks.length + myDailyRoutines.length})</span>
           </button>
 
           <button
@@ -563,7 +566,7 @@ export default function MyDeskPage() {
             style={{ padding: '0.45rem 0.85rem', fontSize: '0.76rem' }}
           >
             <CheckCircle2 size={13} style={{ color: 'var(--stamp-green)' }} />
-            <span>Completed Archive ({myCompletedItems.length})</span>
+            <span>Completed Tasks ({myCompletedItems.length})</span>
           </button>
 
           <button
@@ -709,10 +712,10 @@ export default function MyDeskPage() {
               >
                 <CheckSquare size={28} style={{ color: 'var(--ink-muted)', margin: '0 auto 0.5rem' }} />
                 <div className="serif-display" style={{ fontSize: '1.05rem', fontWeight: 700 }}>
-                  No Daily Tasks on Desk
+                  No Daily Tasks Yet
                 </div>
                 <p style={{ fontSize: '0.78rem', color: 'var(--ink-muted)', margin: '0.25rem 0 0.85rem' }}>
-                  Commission a new daily task docket to log your shift's assignments.
+                  Create a new daily task to get started with your day.
                 </p>
                 <button onClick={handleOpenCreateTask} className="btn-brass" style={{ padding: '0.35rem 0.8rem', fontSize: '0.72rem' }}>
                   Create Daily Task
@@ -751,7 +754,7 @@ export default function MyDeskPage() {
                     letterSpacing: '0.08em',
                   }}
                 >
-                  Section 2 • Workstation Rituals
+                  Section 2 • Daily Recurring Routines
                 </div>
                 <h3 className="serif-display" style={{ fontSize: '1.35rem', fontWeight: 800 }}>
                   Daily Routines ({myDailyRoutines.length})
@@ -769,7 +772,7 @@ export default function MyDeskPage() {
             </div>
 
             <p style={{ fontSize: '0.78rem', color: 'var(--ink-secondary)', marginBottom: '1rem' }}>
-              Recurring workstation habits, calibrations, and inspections. Easily editable with scheduled alerts.
+              Recurring habits and routines. Easily editable with scheduled reminder alerts.
             </p>
 
             {filteredDailyRoutines.length > 0 ? (
@@ -853,10 +856,10 @@ export default function MyDeskPage() {
                   letterSpacing: '0.1em',
                 }}
               >
-                Permanent Archive • Stamped Completed Registry
+                Permanent Record • Completed Tasks Registry
               </div>
               <h3 className="serif-display" style={{ fontSize: '1.65rem', fontWeight: 800 }}>
-                Completed Tasks & Routines ({myCompletedItems.length} Saved Separately)
+                Completed Tasks & Routines ({myCompletedItems.length})
               </h3>
             </div>
 
@@ -938,13 +941,13 @@ export default function MyDeskPage() {
                 letterSpacing: '0.1em',
               }}
             >
-              Archived & Soft-Deleted Dispatches
+              Archived & Deleted Tasks
             </div>
             <h3 className="serif-display" style={{ fontSize: '1.5rem', fontWeight: 800 }}>
               Deleted Tasks & Routines ({myDeletedItems.length})
             </h3>
             <p style={{ fontSize: '0.82rem', color: 'var(--ink-secondary)', marginTop: '0.2rem' }}>
-              These dispatches were removed from your active desk, but remain accessible for administrative auditing with restore capability.
+              These tasks were removed from your active list, but remain accessible for reference and can be restored.
             </p>
           </div>
 
@@ -1006,13 +1009,13 @@ export default function MyDeskPage() {
           }}
         >
           <StickyNote size={14} style={{ color: 'var(--brass-gold)' }} />
-          <span>Workstation Scratchpad (Auto-saved)</span>
+          <span>Quick Notes (Auto-saved)</span>
         </div>
         <textarea
           rows={3}
           value={deskNotes}
           onChange={(e) => handleSaveNotes(e.target.value)}
-          placeholder="Quick jotting notes, telegraph codes, or measurements..."
+          placeholder="Quick jotting notes, reminders, or ideas..."
           className="vintage-textarea ledger-ruled"
           style={{
             fontSize: '0.82rem',

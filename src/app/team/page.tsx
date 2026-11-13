@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getUsers, getTasks, addUser, deleteUser, setCurrentUser, getCurrentUser, BUREAU_SYNC_EVENT } from '@/lib/storage';
-import { getAllProfiles, isMasterAdmin } from '@/lib/auth';
+import { getAllProfiles, isMasterAdmin, deleteUserCompletely } from '@/lib/auth';
 import { useAuth } from '@/components/AuthProvider';
 import { User, Department, Task } from '@/types';
 import { playRubberStampSound, playTypewriterClick } from '@/lib/sound';
@@ -112,12 +112,12 @@ export default function TeamRosterPage() {
     setCurrentUser(user);
   };
 
-  const handleConfirmDelete = (targetUser: User) => {
+  const handleConfirmDelete = async (targetUser: User) => {
     playRubberStampSound();
-    const res = deleteUser(targetUser.id);
+    const res = await deleteUserCompletely(targetUser.id, targetUser.email);
     if (res.success) {
-      setUsers(getUsers());
-      setDeleteNotice(`User @${targetUser.username} (${targetUser.name}) has been decommissioned.`);
+      setUsers((prev) => prev.filter((u) => u.id !== targetUser.id));
+      setDeleteNotice(`User ${targetUser.name} (${targetUser.email || targetUser.username}) has been permanently deleted from database.`);
       setUserToDelete(null);
       setTimeout(() => setDeleteNotice(''), 4500);
     } else {
@@ -158,13 +158,13 @@ export default function TeamRosterPage() {
                 letterSpacing: '0.08em',
               }}
             >
-              Personnel Register • Roll of Artisans & Officers
+              Team Directory • Members
             </div>
             <h2 className="serif-display" style={{ fontSize: '1.8rem', fontWeight: 800 }}>
-              Bureau Personnel Roster
+              Team Members
             </h2>
             <p style={{ fontSize: '0.82rem', color: 'var(--ink-secondary)', marginTop: '0.15rem' }}>
-              Full staff register of craftspeople, systems engineers, and administrative inspectors.
+              Directory of all team members, assigned tasks, and workspace roles.
             </p>
           </div>
 
@@ -173,20 +173,20 @@ export default function TeamRosterPage() {
               href="/"
               className="btn-parchment"
               style={{ padding: '0.55rem 0.85rem', fontSize: '0.78rem' }}
-              title="Go to My Work Desk"
+              title="Go to My Tasks"
             >
               <CheckSquare size={14} style={{ color: 'var(--brass-gold)' }} />
-              <span>My Work Desk</span>
+              <span>My Tasks</span>
             </Link>
 
             <Link
               href="/dispatch-log"
               className="btn-parchment"
               style={{ padding: '0.55rem 0.85rem', fontSize: '0.78rem' }}
-              title="Go to Dispatch Ledger"
+              title="Go to Activity Log"
             >
               <BookOpen size={14} style={{ color: 'var(--ink-secondary)' }} />
-              <span>Dispatch Logs</span>
+              <span>Activity Log</span>
             </Link>
 
             {isMasterAdmin(authUser?.email || currentUser?.email) && (
@@ -194,10 +194,10 @@ export default function TeamRosterPage() {
                 href="/admin"
                 className="btn-parchment"
                 style={{ padding: '0.55rem 0.85rem', fontSize: '0.78rem' }}
-                title="Go to Admin Oversight"
+                title="Go to Admin Dashboard"
               >
                 <ShieldCheck size={14} style={{ color: 'var(--stamp-red)' }} />
-                <span>Admin Oversight</span>
+                <span>Admin Dashboard</span>
               </Link>
             )}
 
@@ -210,7 +210,7 @@ export default function TeamRosterPage() {
               style={{ padding: '0.55rem 1rem', fontSize: '0.78rem' }}
             >
               <UserPlus size={15} />
-              <span>Induct New Member</span>
+              <span>Add Member</span>
             </button>
           </div>
         </div>
